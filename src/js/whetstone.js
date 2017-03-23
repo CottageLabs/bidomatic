@@ -46,6 +46,7 @@ var whetstone = {
 
         this.templates = whetstone.getParam(params.templates, []);
         this.initialTemplateID = whetstone.getParam(params.initialTemplateID, false);
+        this.currentTemplate = false;
 
         // list of all the components that are involved in this edge
         this.components = whetstone.getParam(params.components, []);
@@ -62,24 +63,29 @@ var whetstone = {
 
             // render the template if necessary
             if (this.templates.length > 0 && this.initialTemplateID !== false) {
-                var temp = this.getTemplate({id: this.initialTemplateID});
-                temp.draw(this);
+                this.currentTemplate = this.getTemplate({id: this.initialTemplateID});
+                this.currentTemplate.draw(this);
             }
 
-            // call each of the components to initialise themselves
-            for (var i = 0; i < this.components.length; i++) {
-                var component = this.components[i];
-                component.init(this);
-            }
+            // call each of the relevant components to initialise themselves
+            this.initComponents();
 
-            // now call each component to render itself
+            // now call each relevant component to render itself
             this.draw();
 
             this.context.trigger("whetstone:post-init");
 
-            // now issue a query
-            // this.doQuery();
+            // now cycle the app
             this.cycle();
+        };
+
+        this.initComponents = function() {
+            for (var i = 0; i < this.components.length; i++) {
+                var component = this.components[i];
+                if (this.currentTemplate.caresAbout(component)) {
+                    component.init(this);
+                }
+            }
         };
 
         this.cycle = function() {
@@ -97,14 +103,18 @@ var whetstone = {
             // ask the components to synchronise themselves with the latest state
             for (var i = 0; i < this.components.length; i++) {
                 var component = this.components[i];
-                component.synchronise()
+                if (this.currentTemplate.caresAbout(component)) {
+                    component.synchronise();
+                }
             }
         };
 
         this.draw = function() {
             for (var i = 0; i < this.components.length; i++) {
                 var component = this.components[i];
-                component.draw();
+                if (this.currentTemplate.caresAbout(component)) {
+                    component.draw();
+                }
             }
         };
 
@@ -149,6 +159,23 @@ var whetstone = {
                 }
             }
             return false;
+        };
+        
+        this.switchTemplate = function(params) {
+            var tid = params.id;
+            var temp = this.getTemplate({id: tid});
+            if (temp) {
+                this.currentTemplate = temp;
+                this.currentTemplate.draw(this);
+                this.initComponents();
+                this.draw();
+                this.cycle();
+            } else {
+                throw whetstone.newWhetstoneException({
+                    message: "No such template " + tid
+                });
+            }
+
         }
     },
 
@@ -165,6 +192,10 @@ var whetstone = {
 
         this.init = function(application) {
             this.application = application;
+        };
+
+        this.caresAbout = function(component) {
+            return true;
         };
 
         this.draw = function() {}
@@ -186,6 +217,10 @@ var whetstone = {
             if (this.renderer) {
                 this.renderer.init(this);
             }
+        };
+
+        this.reup = function() {
+            this.context = this.application.jq("#" + this.id);
         };
 
         this.draw = function() {
@@ -214,11 +249,18 @@ var whetstone = {
         this.draw = function() {}
     },
 
+    newWhetstoneException : function(params) {
+        return whetstone.instantiate(whetstone.WhetstoneException, params);
+    },
+    WhetstoneException : function(params) {
+        this.message = whetstone.getParam(params.message, "");
+    },
+
     //////////////////////////////////////////////////
     // Asynchronous batch processing feature
 
     newAsyncGroup : function(params) {
-        whetstone.instantiate(whetstone.AsyncGroup, params);
+        return whetstone.instantiate(whetstone.AsyncGroup, params);
     },
     AsyncGroup : function(params) {
         this.list = whetstone.getParam(params.list);
