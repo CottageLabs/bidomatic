@@ -24,6 +24,9 @@ var bidomatic = {
                 bidomatic.newAddButton({
                     category: "dm.control",
                     controls: "addform"
+                }),
+                bidomatic.newSaveButton({
+                    category: "dm.control"
                 })
             ]
         };
@@ -45,6 +48,19 @@ var bidomatic = {
             var data = whetstone.getParam(params.data, {});
             this.currentData = params.data;
             this._currentFromData();
+        };
+
+        this.getCurrentCSV = function() {
+            var raw = [];
+            for (var i = 0; i < this.current.length; i++) {
+                var row = this.current[i];
+                var obj = {};
+                obj["Content"] = row.content;
+                obj["ID"] = row.id;
+                obj["Tags"] = this._serialiseTags({tags: row.tags});
+                raw.push(obj);
+            }
+            return Papa.unparse(raw);
         };
 
         this.setHistoryData = function(params) {
@@ -85,6 +101,16 @@ var bidomatic = {
             }
 
             return parsed;
+        };
+
+        this._serialiseTags = function(params) {
+            var tags = params.tags;
+            var parts = [];
+            for (var i = 0; i < tags.length; i++) {
+                var tag = tags[i];
+                parts.push(tag.path + ":" + String(tag.sequence));
+            }
+            return parts.join("|");
         };
 
         this.addContent = function(params) {
@@ -153,6 +179,41 @@ var bidomatic = {
         return whetstone.instantiate(bidomatic.LoadSettings, params, whetstone.newComponent);
     },
     LoadSettings : function(params) {
+        this.loadFileset = function(params) {
+            var files = params.files;
+
+            var bidfile = false;
+            for (var i = 0; i < files.length; i++) {
+                if (files[i].name === "bid.json") {
+                    bidfile = files[i];
+                }
+            }
+
+            if (!bidfile) {
+                throw "No bid.json in directory";
+            }
+
+            var fr = new FileReader();
+            var that = this;
+            fr.onload = function(e) {
+                var cont = e.target.result;
+                var bid = JSON.parse(cont);
+
+                var currentFile = false;
+                var historyFile = false;
+                for (var i = 0; i < files.length; i++) {
+                    if (files[i].name === bid.current) {
+                        currentFile = files[i];
+                    } else if (files[i].name === bid.history) {
+                        historyFile = files[i];
+                    }
+                }
+
+                that.loadFiles({current: currentFile, history: historyFile});
+            };
+            var cont = fr.readAsText(bidfile, "utf-8");
+        };
+
         this.loadFiles = function(params) {
             var tasks = [];
             tasks.push({
@@ -210,6 +271,7 @@ var bidomatic = {
         this.namespace = "bidomatic_loadsettings";
 
         this.draw = function() {
+            /*
             var currentId = whetstone.css_id(this.namespace, "current", this);
             var historyId = whetstone.css_id(this.namespace, "history", this);
             var buttonId = whetstone.css_id(this.namespace, "button", this);
@@ -224,6 +286,19 @@ var bidomatic = {
             
             var buttonSelector = whetstone.css_id_selector(this.namespace, "button", this);
             whetstone.on(buttonSelector, "click", this, "filesSelected");
+            */
+            var dirId = whetstone.css_id(this.namespace, "dir", this);
+            var buttonId = whetstone.css_id(this.namespace, "button", this);
+
+            var currentFrag = '<div class="form-group"><div class="input-group">Bid Directory: <input type="file" name="' + dirId + '" id="' + dirId + '" webkitdirectory mozdirectory></div></div>';
+            var button = '<button class="btn btn-success" type="submit" id="' + buttonId + '">Get Bidding!</button>';
+
+            var frag = currentFrag + "<br>" + button;
+
+            this.component.context.html(frag);
+
+            var buttonSelector = whetstone.css_id_selector(this.namespace, "button", this);
+            whetstone.on(buttonSelector, "click", this, "dirSelected");
         };
 
         this.filesSelected = function(element) {
@@ -234,6 +309,13 @@ var bidomatic = {
             var historyFile = this.component.jq(historySelector)[0].files[0];
 
             this.component.loadFiles({current: currentFile, history: historyFile});
+        };
+
+        this.dirSelected = function(element) {
+            var fileSelector = whetstone.css_id_selector(this.namespace, "dir", this);
+            var files = this.component.jq(fileSelector)[0].files;
+
+            this.component.loadFileset({files: files});
         }
     },
 
@@ -273,11 +355,12 @@ var bidomatic = {
                 rhsFrag += '<div class="' + componentClass + '"><div id="' + rhs[i].id + '"></div></div>';
             }
 
-            var controlFrag = "";
+            var controlFrag = '<div class="row">';
             var control = this.application.category("dm.control");
             for (var i = 0; i < control.length; i++) {
-                controlFrag += '<div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div>';
+                controlFrag += '<div class="col-md-1"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
             }
+            controlFrag += "</div>";
 
             frag = frag.replace(/{{LHS}}/g, lhsFrag);
             frag = frag.replace(/{{RHS}}/g, rhsFrag);
@@ -290,8 +373,7 @@ var bidomatic = {
         }
     },
 
-    newTagsBrowser : function(params)
-    {
+    newTagsBrowser : function(params) {
         var my = {
             renderer : bidomatic.newTagsBrowserRend()
         };
@@ -301,8 +383,7 @@ var bidomatic = {
         params = whetstone.overlay(my, params, may);
         return whetstone.instantiate(bidomatic.TagsBrowser, params, whetstone.newComponent);
     },
-    TagsBrowser : function(params)
-    {
+    TagsBrowser : function(params) {
         this.tags = {};
         this.tagFilter = false;
 
@@ -336,12 +417,10 @@ var bidomatic = {
         }
     },
 
-    newTagsBrowserRend : function(params)
-    {
+    newTagsBrowserRend : function(params) {
         return whetstone.instantiate(bidomatic.TagsBrowserRend, params, whetstone.newRenderer)
     },
-    TagsBrowserRend : function(params)
-    {
+    TagsBrowserRend : function(params) {
         this.namespace = "bidomatic_tagsbrowser";
 
         this.draw = function() {
@@ -550,6 +629,49 @@ var bidomatic = {
 
         this.addClicked = function(element) {
             this.component.toggleAddForm();
+        }
+    },
+
+    newSaveButton : function(params) {
+        var my = {
+            renderer : bidomatic.newSaveButtonRend()
+        };
+        var may = {
+            id : "savebutton"
+        };
+        params = whetstone.overlay(my, params, may);
+        return whetstone.instantiate(bidomatic.SaveButton, params, whetstone.newComponent);
+    },
+    SaveButton : function(params) {
+        this.save = function() {
+            var csv = this.application.getCurrentCSV();
+            whetstone.download({
+                content: csv,
+                filename: "current.csv",
+                mimetype: "text/plain"
+            })
+        }
+    },
+
+    newSaveButtonRend : function(params) {
+        return whetstone.instantiate(bidomatic.SaveButtonRend, params, whetstone.newRenderer);
+    },
+    SaveButtonRend : function(params) {
+        this.namespace = "bidomatic_savebutton";
+
+        this.draw = function() {
+            var componentClass = whetstone.css_classes(this.namespace, "component", this);
+            var buttonId = whetstone.css_id(this.namespace, "save", this);
+
+            var frag = '<div class="' + componentClass + '"><button type="button" id="' + buttonId + '" class="alert alert-info">Save</button></div>';
+            this.component.context.html(frag);
+
+            var buttonSelector = whetstone.css_id_selector(this.namespace, "save", this);
+            whetstone.on(buttonSelector, "click", this, "saveClicked");
+        };
+
+        this.saveClicked = function(element) {
+            this.component.save();
         }
     },
 
