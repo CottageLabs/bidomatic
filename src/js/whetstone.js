@@ -651,6 +651,17 @@ var whetstone = {
                 return prefix + bits[0] + decimalSeparator + bits[1] + suffix;
             }
         }
-    }
+    },
 
+    uuid4 : function() {
+        var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+            return v.toString(16);
+        });
+        return uuid;
+    },
+
+    startswith : function(str, prefix) {
+        return str.substring(0, prefix.length) === prefix;
+    }
 };
