@@ -206,7 +206,7 @@ var bidomatic = {
             var containerClass = whetstone.css_classes(this.namespace, "container");
             var componentClass = whetstone.css_classes(this.namespace, "component");
 
-            var frag = '<div class="content"><div class="' + containerClass + '"><div class="row"><div class="col-md-12">{{COMPONENTS}}</div></div></div></div>';
+            var frag = '<div class="container"><div class="' + containerClass + '"><div class="row"><div class="col-md-12">{{COMPONENTS}}</div></div></div></div>';
 
             var compFrag = "";
             var components = this.application.category("load.main");
@@ -393,7 +393,7 @@ var bidomatic = {
             var containerClass = whetstone.css_classes(this.namespace, "container");
             var componentClass = whetstone.css_classes(this.namespace, "component");
 
-            var frag = '<div class="content"><div class="' + containerClass + '">\
+            var frag = '<div class="container"><div class="' + containerClass + '">\
                     <div class="row"><div class="col-md-12">{{CONTROL}}</div></div>\
                     <div class="row"><div class="col-md-3">{{LHS}}</div><div class="col-md-9">{{RHS}}</div></div></div>\
                 </div>';
@@ -413,7 +413,7 @@ var bidomatic = {
             var controlFrag = '<div class="row">';
             var control = this.application.category("dm.control");
             for (var i = 0; i < control.length; i++) {
-                controlFrag += '<div class="col-md-1"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
+                controlFrag += '<div class="col-md-2"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
             }
             controlFrag += "</div>";
 
@@ -541,6 +541,7 @@ var bidomatic = {
         this.limit = whetstone.getParam(params.limit, 10);
 
         this.entries = [];
+        this.relevantTags = [];
 
         this.synchronise = function() {
             this.entries = [];
@@ -558,6 +559,7 @@ var bidomatic = {
                     var id = entry_ids[j];
                     var entry = this.application.getEntry({id: id});
                     this.entries.push(entry);
+                    this.relevantTags.push(this._getHeaderTag({entry: entry, sortTag: tag}));
                 }
             }
         };
@@ -569,6 +571,19 @@ var bidomatic = {
             var tagFilter = this.application.filters.tag;
             return whetstone.startswith(sortTag, tagFilter);
         };
+
+        this._getHeaderTag = function(params) {
+            var entry = params.entry;
+            var sortTag = params.sortTag;
+
+            for (var i = 0; i < entry.tags.length; i++) {
+                var tag = entry.tags[i];
+                if (tag.sort === sortTag) {
+                    return tag.path;
+                }
+            }
+            return "";
+        };
     },
 
     newContentViewerRend : function(params) {
@@ -579,10 +594,17 @@ var bidomatic = {
 
         this.draw = function() {
             var entryClass = whetstone.css_classes(this.namespace, "component", this);
+            var tagClass = whetstone.css_classes(this.namespace, "tag", this);
 
+            var currentTag = false;
             var frag = "";
             for (var i = 0; i < this.component.entries.length; i++) {
                 var entry = this.component.entries[i];
+                var tag = this.component.relevantTags[i];
+                if (tag !== currentTag) {
+                    currentTag = tag;
+                    frag += '<div class="' + tagClass + '">' + tag + '</div>';
+                }
                 var content = whetstone.escapeHtml(entry["content"]);
                 frag += '<div class="' + entryClass + '">' + content + "</div>";
             }
