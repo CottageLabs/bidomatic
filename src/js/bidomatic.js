@@ -37,12 +37,15 @@ var bidomatic = {
     },
     Bidomatic : function(params) {
 
-        this.currentData = whetstone.getParam(params.currentData, false);
+        this.currentData = whetstone.getParam(params.currentData, {});
         this.historyData = whetstone.getParam(params.historyData, false);
-        this.current = whetstone.getParam(params.current, false);
+        this.current = whetstone.getParam(params.current, []);
         this.history = whetstone.getParam(params.history, false);
 
         this.filters = {};
+
+        this.tagOrder = [];
+        this.tagMap = {};
 
         this.setCurrentData = function(params) {
             var data = whetstone.getParam(params.data, {});
@@ -63,6 +66,31 @@ var bidomatic = {
             return Papa.unparse(raw);
         };
 
+        this.iterEntries = function() {
+            var idx = 0;
+            var that = this;
+
+            return {
+                hasNext : function() {
+                    return idx < that.current.length;
+                },
+                next: function() {
+                    return that.current[idx++];
+                }
+            };
+        };
+
+        this.getEntry = function(params) {
+            var id = params.id;
+            for (var i = 0; i < this.current.length; i++) {
+                var entry = this.current[i];
+                if (entry.id === id) {
+                    return entry;
+                }
+            }
+            return false;
+        };
+
         this.setHistoryData = function(params) {
             var data = whetstone.getParam(params.data, {});
             this.historyData = params.data;
@@ -70,6 +98,8 @@ var bidomatic = {
 
         this._currentFromData = function() {
             this.current = [];
+
+            // first convert the data into the usable internal format
             for (var i = 0; i < this.currentData.length; i++) {
                 var row = this.currentData[i];
                 var content = row["Content"];
@@ -78,6 +108,21 @@ var bidomatic = {
                 var parsedTags = this._parseTags({source: tags});
                 this.current.push({tags: parsedTags, content: content, id: id});
             }
+
+            // create the sort order
+            for (var i = 0; i < this.current.length; i++) {
+                var row = this.current[i];
+                for (var j = 0; j < row.tags.length; j++) {
+                    var tag = row.tags[j];
+                    this.tagOrder.push(tag.sort);
+                    if (!(tag.sort in this.tagMap)) {
+                        this.tagMap[tag.sort] = [];
+                    }
+                    this.tagMap[tag.sort].push(row.id);
+                }
+            }
+
+            this.tagOrder.sort();
         };
 
         this._parseTags = function(params) {
@@ -93,11 +138,13 @@ var bidomatic = {
                 var tagPath = allocation.substring(0, idx);
                 var heirarchy = tagPath.split("/");
 
-                parsed.push({
+                var obj = {
                     "path" : tagPath,
                     "heirarchy" : heirarchy,
                     "sequence" : seq
-                });
+                };
+                obj["sort"] = this._sortingTag(obj);
+                parsed.push(obj);
             }
 
             return parsed;
@@ -111,6 +158,14 @@ var bidomatic = {
                 parts.push(tag.path + ":" + String(tag.sequence));
             }
             return parts.join("|");
+        };
+
+        this._sortingTag = function(tagEntry) {
+            if (tagEntry.hasOwnProperty("sequence")) {
+                return tagEntry.path + String(tagEntry.sequence);
+            } else {
+                return tagEntry.path;
+            }
         };
 
         this.addContent = function(params) {
@@ -391,8 +446,10 @@ var bidomatic = {
             this.tags = {};
             this.tagFilter = false;
 
-            for (var i = 0; i < this.application.current.length; i++) {
-                var row = this.application.current[i];
+            var iter = this.application.iterEntries();
+            while (iter.hasNext())
+            {
+                var row = iter.next();
                 for (var j = 0; j < row.tags.length; j++) {
                     var tagEntry = row.tags[j];
                     var context = this.tags;
@@ -488,86 +545,30 @@ var bidomatic = {
         this.synchronise = function() {
             this.entries = [];
 
-            var unsorted = [];
-            var j = 0;
-            for (var i = 0; i < this.application.current.length ; i++) {
-                if (j > this.limit) {
+            for (var i = 0; i < this.application.tagOrder.length ; i++) {
+                if (this.entries.length > this.limit) {
                     break;
                 }
-                var entry = this.application.current[i];
-                if (this._filter(entry)) {
-                    unsorted.push(entry);
+                var tag = this.application.tagOrder[i];
+                if (!this._filter(tag)) {
+                    continue;
                 }
-                j++;
-            }
-
-            if (!this.application.filters.hasOwnProperty("tag")) {
-                this.entries = unsorted;
-                return;
-            }
-
-            var sortMap = {};
-            for (var i = 0; i < unsorted.length; i++) {
-                var entry = unsorted[i];
-                var sortTag = this._sortingTag(entry);
-                if (!(sortTag in sortMap)) {
-                    sortMap[sortTag] = [];
-                }
-                sortMap[sortTag].push(i);
-            }
-            var sortTags = Object.keys(sortMap);
-            sortTags.sort();
-            for (var i = 0; i < sortTags.length; i++) {
-                var ids = sortMap[sortTags[i]];
-                for (var j = 0; j < ids.length; j++) {
-                    this.entries.push(unsorted[ids[j]]);
+                var entry_ids = this.application.tagMap[tag];
+                for (var j = 0; j < entry_ids.length; j++) {
+                    var id = entry_ids[j];
+                    var entry = this.application.getEntry({id: id});
+                    this.entries.push(entry);
                 }
             }
         };
 
-        this._filter = function(entry) {
+        this._filter = function(sortTag) {
             if (!this.application.filters.hasOwnProperty("tag")) {
                 return true;
             }
             var tagFilter = this.application.filters.tag;
-            for (var i = 0 ; i < entry.tags.length; i++) {
-                var tag = entry.tags[i];
-                if (whetstone.startswith(tag.path, tagFilter)) {
-                    return true;
-                }
-            }
-            return false;
+            return whetstone.startswith(sortTag, tagFilter);
         };
-
-        this._sortingTag = function(entry) {
-            var possibles = [];
-            var tagFilter = false;
-            if (this.application.filters.hasOwnProperty("tag")) {
-                tagFilter = this.application.filters.tag;
-            }
-            for (var i = 0 ; i < entry.tags.length; i++) {
-                var tag = entry.tags[i];
-                if (tagFilter)
-                {
-                    if (tag.path === tagFilter && tag.hasOwnProperty("sequence")) {
-                        possibles.push(tag.path + parseInt(tag.sequence));
-                    } else if (whetstone.startswith(tag.path, tagFilter)) {
-                        possibles.push(tag.path);
-                    }
-                } else {
-                    if (tag.hasOwnProperty("sequence")) {
-                        possibles.push(tag.path + parseInt(tag.sequence));
-                    } else {
-                        possibles.push(tag.path);
-                    }
-                }
-            }
-            if (possibles.length > 0) {
-                possibles.sort();
-                return possibles[0];
-            }
-            return "";
-        }
     },
 
     newContentViewerRend : function(params) {
