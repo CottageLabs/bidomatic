@@ -181,8 +181,18 @@ var bidomatic = {
         };
 
         this.addFilters = function(params) {
-            var tag = params.tag;
-            this.filters["tag"] = tag;
+            this.filters["tag"] = params.tag;
+            this.cycle();
+        };
+
+        this.clearFilters = function(params) {
+            var filters = params.filters;
+            for (var i = 0; i < filters.length; i++) {
+                var filterType = filters[i];
+                if (filterType in this.filters) {
+                    delete this.filters[filterType];
+                }
+            }
             this.cycle();
         };
 
@@ -472,6 +482,10 @@ var bidomatic = {
             var path = params.path;
             this.application.addFilters({tag: path});
         }
+
+        this.clearPathFilter = function() {
+            this.application.clearFilters({filters: ["tag"]});
+        }
     },
 
     newTagsBrowserRend : function(params) {
@@ -481,17 +495,27 @@ var bidomatic = {
         this.namespace = "bidomatic_tagsbrowser";
 
         this.draw = function() {
+            var allClass = whetstone.css_classes(this.namespace, "all", this);
             var linkClass = whetstone.css_classes(this.namespace, "link", this);
-            var frag = this._drawLevel({context: this.component.tags, linkClass: linkClass, path: ""});
+
+            var frag = '<a href="#" class="' + allClass + '">[show all]</a><br>';
+            frag += this._drawLevel({context: this.component.tags, linkClass: linkClass, path: ""});
             this.component.context.html(frag);
 
             var linkSelector = whetstone.css_class_selector(this.namespace, "link", this);
             whetstone.on(linkSelector, "click", this, "tagSelected");
+
+            var allSelector = whetstone.css_class_selector(this.namespace, "all", this);
+            whetstone.on(allSelector, "click", this, "clearTags");
         };
 
         this.tagSelected = function(element) {
             var path = $(element).attr("data-path");
             this.component.addPathFilter({path: path});
+        };
+
+        this.clearTags = function(element) {
+            this.component.clearPathFilter();
         };
 
         this._drawLevel = function(params) {
@@ -545,6 +569,7 @@ var bidomatic = {
 
         this.synchronise = function() {
             this.entries = [];
+            this.relevantTags = [];
 
             for (var i = 0; i < this.application.tagOrder.length ; i++) {
                 if (this.entries.length > this.limit) {
