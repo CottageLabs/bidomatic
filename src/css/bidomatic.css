@@ -1,4 +1,23 @@
 .bidomatic_contentviewer-tag {
     font-weight: bold;
     font-size: 120%;
+    padding: 5px 0px 0px 5px;
+}
+
+.bidomatic_contentviewer-top {
+    text-align: right;
+}
+
+.bidomatic_contentviewer-component {
+    padding: 5px 0px 0px 5px;
+}
+
+.bidomatic_contentviewer-id {
+    font-size: 80%;
+    color: #d5d5d5;
+}
+
+.bidomatic_contentviewer-tags {
+    font-size: 80%;
+    color: #d5d5d5;
 }

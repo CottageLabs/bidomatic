@@ -14,7 +14,7 @@ var bidomatic = {
                 bidomatic.newTagsBrowser({
                     category: "dm.lhs"
                 }),
-                bidomatic.newAddForm({
+                bidomatic.newAddEditForm({
                     id: "addform",
                     category: "dm.rhs"
                 }),
@@ -104,9 +104,9 @@ var bidomatic = {
                 var row = this.currentData[i];
                 var content = row["Content"];
                 var tags = row["Tags"];
-                var id = row["ID"];
+                var id = String(row["ID"]);
                 var parsedTags = this._parseTags({source: tags});
-                this.current.push({tags: parsedTags, content: content, id: id});
+                this.current.push({tags: parsedTags, content: content, id: id, tagstring: tags});
             }
 
             // create the sort order
@@ -139,6 +139,7 @@ var bidomatic = {
                 var heirarchy = tagPath.split("/");
 
                 var obj = {
+                    "raw" : allocation,
                     "path" : tagPath,
                     "heirarchy" : heirarchy,
                     "sequence" : seq
@@ -589,6 +590,18 @@ var bidomatic = {
             }
         };
 
+        this.getEditForm = function(params) {
+            var id = params.id;
+            var entry = this.application.getEntry({id : id});
+            var editComponent = bidomatic.newAddEditForm({
+                id: "edit_" + id,
+                entry: entry,
+                visible: true
+            });
+            editComponent.init(this.application);
+            return editComponent;
+        };
+
         this._filter = function(sortTag) {
             if (!this.application.filters.hasOwnProperty("tag")) {
                 return true;
@@ -617,24 +630,95 @@ var bidomatic = {
     ContentViewerRend : function(params) {
         this.namespace = "bidomatic_contentviewer";
 
+        this.restore = "";
+
         this.draw = function() {
             var entryClass = whetstone.css_classes(this.namespace, "component", this);
             var tagClass = whetstone.css_classes(this.namespace, "tag", this);
+            var controlsClass = whetstone.css_classes(this.namespace, "controls", this);
+            var showControlsClass = whetstone.css_classes(this.namespace, "showcontrols", this);
+            var topRowClass = whetstone.css_classes(this.namespace, "top", this);
+            var idClass = whetstone.css_classes(this.namespace, "id", this);
+            var tagsClass = whetstone.css_classes(this.namespace, "tags", this);
+            var editClass = whetstone.css_classes(this.namespace, "edit", this);
 
             var currentTag = false;
-            var frag = "";
+            var frag = '<div class="row"><div class="col-md-12"><div class="' + topRowClass + '"><a href="#" class="' + showControlsClass + '">[show controls]</a></div></div></div>';
             for (var i = 0; i < this.component.entries.length; i++) {
                 var entry = this.component.entries[i];
                 var tag = this.component.relevantTags[i];
                 if (tag !== currentTag) {
                     currentTag = tag;
-                    frag += '<div class="' + tagClass + '">' + tag + '</div>';
+                    frag += '<div class="row"><div class="col-md-12"><div class="' + tagClass + '">' + tag + '</div></div></div>';
                 }
                 var content = whetstone.escapeHtml(entry["content"]);
-                frag += '<div class="' + entryClass + '">' + content + "</div>";
+
+                var entryTags = [];
+                for (var j = 0; j < entry.tags.length; j++) {
+                    entryTags.push(entry.tags[j].raw);
+                }
+
+                var rowId = whetstone.css_id(this.namespace, "row_" + entry.id + "_" + whetstone.safeId(currentTag), this);
+                var controls = '<div class="' + controlsClass + '">\
+                    <button type="button" class="' + editClass + '" data-id="' + entry.id + '" data-row="' + rowId + '">Edit</button><br>\
+                    <span class="' + idClass + '">' + entry.id + '</span><br>\
+                    <span class="' + tagsClass + '">' + entryTags.join(" | ") + '</span>\
+                    </div>';
+
+                frag += '<div class="row">\
+                    <div class="col-md-10"><div class="' + entryClass + '" id="' + rowId + '">' + content + '</div></div>\
+                    <div class="col-md-2">' + controls + '</div>\
+                    </div>';
             }
             this.component.context.html(frag);
+
+            var controlsSelector = whetstone.css_class_selector(this.namespace, "controls", this);
+            this.component.jq(controlsSelector).hide();
+
+            var showSelector = whetstone.css_class_selector(this.namespace, "showcontrols", this);
+            whetstone.on(showSelector, "click", this, "toggleControls");
+
+            var editSelector = whetstone.css_class_selector(this.namespace, "edit", this);
+            whetstone.on(editSelector, "click", this, "editEntry");
         };
+
+        this.toggleControls = function() {
+            var controlsSelector = whetstone.css_class_selector(this.namespace, "controls", this);
+            this.component.jq(controlsSelector).toggle();
+        };
+
+        this.editEntry = function(element) {
+            var entry_id = $(element).attr("data-id");
+            var rowId = $(element).attr("data-row");
+            var comp = this.component.getEditForm({id: entry_id});
+            var el = this.component.jq("#" + rowId);
+
+            var that = this;
+            comp.oncancel = function() {
+                el.html(that.restore);
+                that.enableEditButtons();
+            };
+
+            this.disableEditButtons();
+
+            this.restore = el.html();
+            el.html('<div id="' + comp.id + '"></div>');
+
+            comp.reup();
+            comp.draw();
+        };
+
+        this.disableEditButtons = function() {
+            var editSelector = whetstone.css_class_selector(this.namespace, "edit", this);
+            var el = this.component.jq(editSelector);
+            el.attr("disabled", "disabled");
+        };
+
+        this.enableEditButtons = function() {
+            var editSelector = whetstone.css_class_selector(this.namespace, "edit", this);
+            var el = this.component.jq(editSelector);
+            el.removeAttr("disabled");
+        }
     },
 
 
@@ -651,11 +735,24 @@ var bidomatic = {
     AddButton : function(params) {
         this.controls = whetstone.getParam(params.controls, "addform");
 
+        this.init = function(application) {
+            whetstone.up(this, "init", [application]);
+            this.setupControls();
+        };
+        
         this.toggleAddForm = function() {
             var comp = this.application.getComponent({id: this.controls});
             comp.toggleVisible();
             comp.draw();
-        }
+        };
+
+        this.setupControls = function() {
+            var comp = this.application.getComponent({id: this.controls});
+            var that = this;
+            comp.oncancel = function() {
+                that.toggleAddForm();
+            }
+        };
     },
 
     newAddButtonRend : function(params) {
@@ -724,18 +821,20 @@ var bidomatic = {
     },
 
 
-    newAddForm : function(params) {
+    newAddEditForm : function(params) {
         var my = {
-            renderer : bidomatic.newAddFormRend()
+            renderer : bidomatic.newAddEditFormRend()
         };
         var may = {
             id : "addform"
         };
         params = whetstone.overlay(my, params, may);
-        return whetstone.instantiate(bidomatic.AddForm, params, whetstone.newComponent);
+        return whetstone.instantiate(bidomatic.AddEditForm, params, whetstone.newComponent);
     },
-    AddForm : function(params) {
+    AddEditForm : function(params) {
         this.visible = whetstone.getParam(params.visible, false);
+        this.entry = whetstone.getParam(params.entry, false);
+        this.oncancel = whetstone.getParam(params.oncancel, false);
 
         this.toggleVisible = function() {
             this.visible = !this.visible;
@@ -744,13 +843,19 @@ var bidomatic = {
         this.addContent = function(params) {
             this.application.addContent(params);
         };
+
+        this.cancel = function() {
+            if (this.oncancel) {
+                this.oncancel();
+            }
+        }
     },
 
-    newAddFormRend : function(params) {
-        return whetstone.instantiate(bidomatic.AddFormRend, params, whetstone.newRenderer);
+    newAddEditFormRend : function(params) {
+        return whetstone.instantiate(bidomatic.AddEditFormRend, params, whetstone.newRenderer);
     },
-    AddFormRend : function(params) {
-        this.namespace = "bidomatic_addform";
+    AddEditFormRend : function(params) {
+        this.namespace = "bidomatic_addeditform";
 
         this.draw = function() {
             if (!this.component.visible) {
@@ -761,26 +866,43 @@ var bidomatic = {
             var componentClass = whetstone.css_classes(this.namespace, "component", this);
             var textareaId = whetstone.css_id(this.namespace, "content", this);
             var tagsId = whetstone.css_id(this.namespace, "tags", this);
-            var buttonId = whetstone.css_id(this.namespace, "add", this);
+            var saveId = whetstone.css_id(this.namespace, "save", this);
+            var cancelId = whetstone.css_id(this.namespace, "cancel", this);
+
+            var content = "";
+            var tags = "";
+
+            if (this.component.entry) {
+                content = this.component.entry.content;
+                tags = this.component.entry.tagstring;
+            }
 
             var frag = '<div class="' + componentClass + '">\
-                    <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%"></textarea>\
-                    <textarea name="' + tagsId + '" id="' + tagsId + '" placeholder="tags (X/Y:seq|Z:seq)" style="width: 100%"></textarea>\
-                    <button type="button" id="' + buttonId + '" class="alert alert-success">Add</button>\
+                    <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%">' + content + '</textarea>\
+                    <textarea name="' + tagsId + '" id="' + tagsId + '" placeholder="tags (X/Y:seq|Z:seq)" style="width: 100%">' + tags + '</textarea>\
+                    <button type="button" id="' + saveId + '" class="alert alert-success">Save</button>\
+                    <button type="button" id="' + cancelId + '" class="alert alert-danger">Cancel</button>\
                 </div>';
             this.component.context.html(frag);
 
-            var buttonSelector = whetstone.css_id_selector(this.namespace, "add", this);
-            whetstone.on(buttonSelector, "click", this, "addClicked");
+            var saveSelector = whetstone.css_id_selector(this.namespace, "save", this);
+            whetstone.on(saveSelector, "click", this, "saveClicked");
+
+            var cancelSelector = whetstone.css_id_selector(this.namespace, "cancel", this);
+            whetstone.on(cancelSelector, "click", this, "cancelClicked");
         };
 
-        this.addClicked = function(element) {
+        this.saveClicked = function(element) {
             var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
             var tagsSelector = whetstone.css_id_selector(this.namespace, "tags", this);
             var content = this.component.jq(contentSelector).val();
             var tags = this.component.jq(tagsSelector).val();
             this.component.addContent({content: content, tags: tags});
         };
+
+        this.cancelClicked = function(element) {
+            this.component.cancel();
+        }
     }
 
 
