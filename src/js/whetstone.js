@@ -34,7 +34,16 @@ var whetstone = {
         if (protoConstructor) {
             clazz.prototype = protoConstructor(params);
         }
-        return new clazz(params);
+        var inst = new clazz(params);
+        if (protoConstructor) {
+            inst.__proto_constructor__ = protoConstructor;
+        }
+        return inst;
+    },
+    
+    up : function(inst, fn, args) {
+        var parent = new inst.__proto_constructor__();
+        parent[fn].apply(inst, args);
     },
 
     newApplication : function(params) {
@@ -603,6 +612,7 @@ var whetstone = {
             .replace(/>/g, "_")
             .replace(/"/g, "_")
             .replace(/'/g, "_")
+            .replace(/\//g, "_")
             .replace(/\./gi,'_')
             .replace(/\:/gi,'_')
             .replace(/\s/gi,"_");
