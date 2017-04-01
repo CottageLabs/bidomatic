@@ -27,6 +27,9 @@ var bidomatic = {
                 }),
                 bidomatic.newSaveButton({
                     category: "dm.control"
+                }),
+                bidomatic.newBidInfo({
+                    category: "dm.info"
                 })
             ]
         };
@@ -41,6 +44,8 @@ var bidomatic = {
 
         this.current = whetstone.getParam(params.current, []);
         this.history = whetstone.getParam(params.history, false);
+
+        this.bidFile = whetstone.getParam(params.bidFile, {});
 
         this.filters = {};
 
@@ -270,21 +275,27 @@ var bidomatic = {
                     }
                 }
 
-                that.loadFiles({current: currentFile, history: historyFile});
+                that.loadFiles({current: currentFile, history: historyFile, bidFile: bid});
             };
             var cont = fr.readAsText(bidfile, "utf-8");
         };
 
         this.loadFiles = function(params) {
+            this.application.bidFile = params.bidFile;
+
             var tasks = [];
-            tasks.push({
-                type: "current",
-                file: params.current
-            });
-            tasks.push({
-                type: "history",
-                file: params.history
-            });
+            if (params.current) {
+                tasks.push({
+                    type: "current",
+                    file: params.current
+                });
+            }
+            if (params.history) {
+                tasks.push({
+                    type: "history",
+                    file: params.history
+                });
+            }
 
             var that = this;
             var pg = whetstone.newAsyncGroup({
@@ -339,22 +350,6 @@ var bidomatic = {
         this.namespace = "bidomatic_loadsettings";
 
         this.draw = function() {
-            /*
-            var currentId = whetstone.css_id(this.namespace, "current", this);
-            var historyId = whetstone.css_id(this.namespace, "history", this);
-            var buttonId = whetstone.css_id(this.namespace, "button", this);
-
-            var currentFrag = '<div class="form-group"><div class="input-group">Current Data: <input type="file" name="' + currentId + '" id="' + currentId + '"></div></div>';
-            var historyFrag = '<div class="form-group"><div class="input-group">History File: <input type="file" name="' + historyId + '" id="' + historyId + '"></div></div>';
-            var button = '<button class="btn btn-success" type="submit" id="' + buttonId + '">Get Bidding!</button>';
-
-            var frag = currentFrag + "<br>" + historyFrag + "<br>" + button;
-
-            this.component.context.html(frag);
-            
-            var buttonSelector = whetstone.css_id_selector(this.namespace, "button", this);
-            whetstone.on(buttonSelector, "click", this, "filesSelected");
-            */
             var dirId = whetstone.css_id(this.namespace, "dir", this);
             var buttonId = whetstone.css_id(this.namespace, "button", this);
 
@@ -367,16 +362,6 @@ var bidomatic = {
 
             var buttonSelector = whetstone.css_id_selector(this.namespace, "button", this);
             whetstone.on(buttonSelector, "click", this, "dirSelected");
-        };
-
-        this.filesSelected = function(element) {
-            var currentSelector = whetstone.css_id_selector(this.namespace, "current", this);
-            var historySelector = whetstone.css_id_selector(this.namespace, "history", this);
-
-            var currentFile = this.component.jq(currentSelector)[0].files[0];
-            var historyFile = this.component.jq(historySelector)[0].files[0];
-
-            this.component.loadFiles({current: currentFile, history: historyFile});
         };
 
         this.dirSelected = function(element) {
@@ -407,7 +392,7 @@ var bidomatic = {
             var componentClass = whetstone.css_classes(this.namespace, "component");
 
             var frag = '<div class="container"><div class="' + containerClass + '">\
-                    <div class="row"><div class="col-md-12">{{CONTROL}}</div></div>\
+                    <div class="row"><div class="col-md-6">{{CONTROL}}</div><div class="col-md-6">{{INFO}}</div></div>\
                     <div class="row"><div class="col-md-3">{{LHS}}</div><div class="col-md-9">{{RHS}}</div></div></div>\
                 </div>';
 
@@ -426,13 +411,20 @@ var bidomatic = {
             var controlFrag = '<div class="row">';
             var control = this.application.category("dm.control");
             for (var i = 0; i < control.length; i++) {
-                controlFrag += '<div class="col-md-2"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
+                controlFrag += '<div class="col-md-3"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
             }
             controlFrag += "</div>";
+
+            var infoFrag = "";
+            var info = this.application.category("dm.info");
+            for (var i = 0; i < info.length; i++) {
+                infoFrag += '<div class="' + componentClass + '"><div id="' + info[i].id + '"></div></div>';
+            }
 
             frag = frag.replace(/{{LHS}}/g, lhsFrag);
             frag = frag.replace(/{{RHS}}/g, rhsFrag);
             frag = frag.replace(/{{CONTROL}}/g, controlFrag);
+            frag = frag.replace(/{{INFO}}/g, infoFrag);
             this.application.context.html(frag);
         };
 
@@ -723,7 +715,6 @@ var bidomatic = {
         }
     },
 
-
     newAddButton : function(params) {
         var my = {
             renderer : bidomatic.newAddButtonRend()
@@ -833,7 +824,6 @@ var bidomatic = {
         }
     },
 
-
     newAddEditForm : function(params) {
         var my = {
             renderer : bidomatic.newAddEditFormRend()
@@ -882,6 +872,7 @@ var bidomatic = {
 
             var componentClass = whetstone.css_classes(this.namespace, "component", this);
             var textareaId = whetstone.css_id(this.namespace, "content", this);
+            var contentClass = whetstone.css_classes(this.namespace, "content_textarea", this);
             var tagsId = whetstone.css_id(this.namespace, "tags", this);
             var saveId = whetstone.css_id(this.namespace, "save", this);
             var cancelId = whetstone.css_id(this.namespace, "cancel", this);
@@ -897,12 +888,18 @@ var bidomatic = {
             }
 
             var frag = '<div class="' + componentClass + '">\
-                    <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%">' + content + '</textarea>\
+                    <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%" class="' + contentClass + '">' + content + '</textarea>\
                     <textarea name="' + tagsId + '" id="' + tagsId + '" placeholder="tags (X/Y:seq|Z:seq)" style="width: 100%">' + tags + '</textarea>\
                     <button type="button" id="' + saveId + '" class="alert alert-success" data-id="' + id + '">Save</button>\
                     <button type="button" id="' + cancelId + '" class="alert alert-danger">Cancel</button>\
                 </div>';
             this.component.context.html(frag);
+
+            if (content !== "") {
+                var textareaSelector = whetstone.css_class_selector(this.namespace, "content_textarea", this);
+                var el = this.component.jq(textareaSelector);
+                el.height(el[0].scrollHeight);
+            }
 
             var saveSelector = whetstone.css_id_selector(this.namespace, "save", this);
             whetstone.on(saveSelector, "click", this, "saveClicked");
@@ -929,5 +926,37 @@ var bidomatic = {
         this.cancelClicked = function(element) {
             this.component.cancel();
         }
+    },
+
+    newBidInfo : function(params) {
+        var my = {
+            renderer : bidomatic.newBidInfoRend()
+        };
+        var may = {
+            id : "bidinfo"
+        };
+        params = whetstone.overlay(my, params, may);
+        return whetstone.instantiate(bidomatic.BidInfo, params, whetstone.newComponent);
+    },
+    BidInfo : function(params) {
+        this.name = "";
+
+        this.synchronise = function () {
+            this.name = this.application.bidFile.name;
+        }
+    },
+
+    newBidInfoRend : function(params) {
+        return whetstone.instantiate(bidomatic.BidInfoRend, params, whetstone.newRenderer);
+    },
+    BidInfoRend : function(params) {
+        this.namespace = "bidomatic_bidinfo";
+
+        this.draw = function() {
+            var componentClass = whetstone.css_classes(this.namespace, "component", this);
+
+            var frag = '<div class="' + componentClass + '">' + whetstone.escapeHtml(this.component.name) + '</div>';
+            this.component.context.html(frag);
+        };
     }
 };

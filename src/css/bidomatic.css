@@ -21,3 +21,12 @@
     font-size: 80%;
     color: #d5d5d5;
 }
+
+.bidomatic_bidinfo-component {
+    font-size: 200%;
+    font-weight: bold;
+}
+
+#bidomatic_addeditform-content-addform {
+    height: 200px;
+}
