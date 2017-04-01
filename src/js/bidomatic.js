@@ -623,6 +623,7 @@ var bidomatic = {
     },
     ContentViewerRend : function(params) {
         this.namespace = "bidomatic_contentviewer";
+        this.markdown = new showdown.Converter();
 
         this.restore = "";
 
@@ -645,7 +646,8 @@ var bidomatic = {
                     currentTag = tag;
                     frag += '<div class="row"><div class="col-md-12"><div class="' + tagClass + '">' + tag + '</div></div></div>';
                 }
-                var content = whetstone.escapeHtml(entry["content"]);
+                // var content = whetstone.escapeHtml(entry["content"]);
+                var content = this.markdown.makeHtml(entry["content"]);
 
                 var entryTags = [];
                 for (var j = 0; j < entry.tags.length; j++) {
