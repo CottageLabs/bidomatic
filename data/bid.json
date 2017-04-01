@@ -1,4 +1,5 @@
 {
+  "name" : "Test Bid Master",
   "current" : "current.csv",
   "history" : "history.csv"
 }
