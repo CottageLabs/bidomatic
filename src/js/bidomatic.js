@@ -69,6 +69,29 @@ var bidomatic = {
             }
         };
 
+        this.updateEntry = function(params) {
+            var content = params.content;
+            var id = params.id;
+            var tags = params.tagstring;
+
+            var index = whetstone.getParam(params.index, true);
+            var cycle = whetstone.getParam(params.cycle, true);
+
+            var parsedTags = this._parseTags({source: tags});
+            var entry = this.getEntry({id: id});
+
+            entry.tags = parsedTags;
+            entry.content = content;
+            entry.tagstring = tags;
+
+            if (index) {
+                this.index();
+            }
+            if (cycle) {
+                this.cycle();
+            }
+        };
+
         this.getEntry = function(params) {
             var id = params.id;
             for (var i = 0; i < this.current.length; i++) {
@@ -831,7 +854,11 @@ var bidomatic = {
         };
 
         this.addContent = function(params) {
-            this.application.addEntry(params);
+            if (params.id) {
+                this.application.updateEntry(params);
+            } else {
+                this.application.addEntry(params);
+            }
         };
 
         this.cancel = function() {
@@ -861,16 +888,18 @@ var bidomatic = {
 
             var content = "";
             var tags = "";
+            var id = "";
 
             if (this.component.entry) {
                 content = this.component.entry.content;
                 tags = this.component.entry.tagstring;
+                id = this.component.entry.id;
             }
 
             var frag = '<div class="' + componentClass + '">\
                     <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%">' + content + '</textarea>\
                     <textarea name="' + tagsId + '" id="' + tagsId + '" placeholder="tags (X/Y:seq|Z:seq)" style="width: 100%">' + tags + '</textarea>\
-                    <button type="button" id="' + saveId + '" class="alert alert-success">Save</button>\
+                    <button type="button" id="' + saveId + '" class="alert alert-success" data-id="' + id + '">Save</button>\
                     <button type="button" id="' + cancelId + '" class="alert alert-danger">Cancel</button>\
                 </div>';
             this.component.context.html(frag);
@@ -883,11 +912,18 @@ var bidomatic = {
         };
 
         this.saveClicked = function(element) {
+            var id = $(element).attr("data-id");
             var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
             var tagsSelector = whetstone.css_id_selector(this.namespace, "tags", this);
+
             var content = this.component.jq(contentSelector).val();
             var tags = this.component.jq(tagsSelector).val();
-            this.component.addContent({content: content, tagstring: tags});
+
+            var obj = {content: content, tagstring: tags};
+            if (id !== "") {
+                obj["id"] = id;
+            }
+            this.component.addContent(obj);
         };
 
         this.cancelClicked = function(element) {
