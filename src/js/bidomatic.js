@@ -37,8 +37,8 @@ var bidomatic = {
     },
     Bidomatic : function(params) {
 
-        this.currentData = whetstone.getParam(params.currentData, {});
         this.historyData = whetstone.getParam(params.historyData, false);
+
         this.current = whetstone.getParam(params.current, []);
         this.history = whetstone.getParam(params.history, false);
 
@@ -47,23 +47,37 @@ var bidomatic = {
         this.tagOrder = [];
         this.tagMap = {};
 
-        this.setCurrentData = function(params) {
-            var data = whetstone.getParam(params.data, {});
-            this.currentData = params.data;
-            this._currentFromData();
+        this.addEntry = function(params) {
+            var content = params.content;
+            var id = params.id;
+            var tags = params.tagstring;
+
+            var index = whetstone.getParam(params.index, true);
+            var cycle = whetstone.getParam(params.cycle, true);
+
+            var parsedTags = this._parseTags({source: tags});
+            if (!id) {
+                id = whetstone.uuid4();
+            }
+            this.current.push({tags: parsedTags, content: content, id: id, tagstring: tags});
+
+            if (index) {
+                this.index();
+            }
+            if (cycle) {
+                this.cycle();
+            }
         };
 
-        this.getCurrentCSV = function() {
-            var raw = [];
+        this.getEntry = function(params) {
+            var id = params.id;
             for (var i = 0; i < this.current.length; i++) {
-                var row = this.current[i];
-                var obj = {};
-                obj["Content"] = row.content;
-                obj["ID"] = row.id;
-                obj["Tags"] = this._serialiseTags({tags: row.tags});
-                raw.push(obj);
+                var entry = this.current[i];
+                if (entry.id === id) {
+                    return entry;
+                }
             }
-            return Papa.unparse(raw);
+            return false;
         };
 
         this.iterEntries = function() {
@@ -80,34 +94,30 @@ var bidomatic = {
             };
         };
 
-        this.getEntry = function(params) {
-            var id = params.id;
-            for (var i = 0; i < this.current.length; i++) {
-                var entry = this.current[i];
-                if (entry.id === id) {
-                    return entry;
-                }
-            }
-            return false;
-        };
-
         this.setHistoryData = function(params) {
             var data = whetstone.getParam(params.data, {});
             this.historyData = params.data;
         };
 
-        this._currentFromData = function() {
-            this.current = [];
+        this.addFilters = function(params) {
+            this.filters["tag"] = params.tag;
+            this.cycle();
+        };
 
-            // first convert the data into the usable internal format
-            for (var i = 0; i < this.currentData.length; i++) {
-                var row = this.currentData[i];
-                var content = row["Content"];
-                var tags = row["Tags"];
-                var id = String(row["ID"]);
-                var parsedTags = this._parseTags({source: tags});
-                this.current.push({tags: parsedTags, content: content, id: id, tagstring: tags});
+        this.clearFilters = function(params) {
+            var filters = params.filters;
+            for (var i = 0; i < filters.length; i++) {
+                var filterType = filters[i];
+                if (filterType in this.filters) {
+                    delete this.filters[filterType];
+                }
             }
+            this.cycle();
+        };
+
+        this.index = function() {
+            this.tagMap = {};
+            this.tagOrder = [];
 
             // create the sort order
             for (var i = 0; i < this.current.length; i++) {
@@ -151,50 +161,12 @@ var bidomatic = {
             return parsed;
         };
 
-        this._serialiseTags = function(params) {
-            var tags = params.tags;
-            var parts = [];
-            for (var i = 0; i < tags.length; i++) {
-                var tag = tags[i];
-                parts.push(tag.path + ":" + String(tag.sequence));
-            }
-            return parts.join("|");
-        };
-
         this._sortingTag = function(tagEntry) {
             if (tagEntry.hasOwnProperty("sequence")) {
                 return tagEntry.path + String(tagEntry.sequence);
             } else {
                 return tagEntry.path;
             }
-        };
-
-        this.addContent = function(params) {
-            var content = params.content;
-            var tags = params.tags;
-            var parsedTags = this._parseTags({source: tags});
-            this.current.push({
-                tags: parsedTags,
-                content: content,
-                id: whetstone.uuid4()
-            });
-            this.cycle();
-        };
-
-        this.addFilters = function(params) {
-            this.filters["tag"] = params.tag;
-            this.cycle();
-        };
-
-        this.clearFilters = function(params) {
-            var filters = params.filters;
-            for (var i = 0; i < filters.length; i++) {
-                var filterType = filters[i];
-                if (filterType in this.filters) {
-                    delete this.filters[filterType];
-                }
-            }
-            this.cycle();
         };
 
         this.init();
@@ -313,7 +285,13 @@ var bidomatic = {
                     var entry = params.entry;
                     var data = results.data;
                     if (entry.type === "current") {
-                        that.application.setCurrentData({data : data});
+                        for (var i = 0; i < data.length; i++) {
+                            var row = data[i];
+                            var content = row["Content"];
+                            var tags = row["Tags"];
+                            var id = String(row["ID"]);
+                            that.application.addEntry({tagstring: tags, content: content, id: id, index: false, cycle: false});
+                        }
                     } else if (entry.type === "history") {
                         that.application.setHistoryData({data : data});
                     }
@@ -321,6 +299,7 @@ var bidomatic = {
                 errorCallbackArgs : ["results"],
                 error:  function(params) {},
                 carryOn: function() {
+                    that.application.index();
                     that.application.synchronise();
                     that.application.switchTemplate({id : "dmtemplate"});
                 }
@@ -789,12 +768,23 @@ var bidomatic = {
     },
     SaveButton : function(params) {
         this.save = function() {
-            var csv = this.application.getCurrentCSV();
+            var raw = [];
+            var iter = this.application.iterEntries();
+            while (iter.hasNext()) {
+                var row = iter.next();
+                var obj = {};
+                obj["Content"] = row.content;
+                obj["ID"] = row.id;
+                obj["Tags"] = row.tagstring;
+                raw.push(obj);
+            }
+
+            var csv = Papa.unparse(raw);
             whetstone.download({
                 content: csv,
                 filename: "current.csv",
                 mimetype: "text/plain"
-            })
+            });
         }
     },
 
@@ -841,7 +831,7 @@ var bidomatic = {
         };
 
         this.addContent = function(params) {
-            this.application.addContent(params);
+            this.application.addEntry(params);
         };
 
         this.cancel = function() {
@@ -897,13 +887,11 @@ var bidomatic = {
             var tagsSelector = whetstone.css_id_selector(this.namespace, "tags", this);
             var content = this.component.jq(contentSelector).val();
             var tags = this.component.jq(tagsSelector).val();
-            this.component.addContent({content: content, tags: tags});
+            this.component.addContent({content: content, tagstring: tags});
         };
 
         this.cancelClicked = function(element) {
             this.component.cancel();
         }
     }
-
-
 };
