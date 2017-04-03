@@ -233,6 +233,9 @@ var whetstone = {
         };
 
         this.draw = function() {
+            if (this.context.length === 0) {
+                this.reup();
+            }
             if (this.renderer) {
                 this.renderer.draw();
             }
@@ -534,19 +537,19 @@ var whetstone = {
         // otherwise, if it has an inner, use the selector on that.
         if (delay) {
             if (caller.component) {
-                caller.component.jq(selector).bindWithDelay(event, clos, delay);
+                caller.component.jq(selector).unbind(event).bindWithDelay(event, clos, delay);
             } else if (caller.application) {
-                caller.application.jq(selector).bindWithDelay(event, clos, delay);
+                caller.application.jq(selector).unbind(event).bindWithDelay(event, clos, delay);
             } else {
                 console.log("attempt to bindWithDelay on caller which has neither inner component or application")
             }
         } else {
             if (caller.component) {
-                caller.component.jq(selector).on(event, clos)
+                caller.component.jq(selector).unbind(event).on(event, clos);
             } else if (caller.application) {
-                caller.application.jq(selector).on(event, clos)
+                caller.application.jq(selector).unbind(event).on(event, clos);
             } else {
-                console.log("attempt to bindWithDelay on caller which has neither inner component or application")
+                console.log("attempt to bind on caller which has neither inner component or application")
             }
         }
     },
