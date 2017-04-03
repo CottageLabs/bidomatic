@@ -14,12 +14,12 @@
 
 .bidomatic_contentviewer-id {
     font-size: 80%;
-    color: #d5d5d5;
+    color: #888888;
 }
 
 .bidomatic_contentviewer-tags {
     font-size: 80%;
-    color: #d5d5d5;
+    color: #888888;
 }
 
 .bidomatic_bidinfo-component {
@@ -27,6 +27,6 @@
     font-weight: bold;
 }
 
-#bidomatic_addeditform-content-addform {
+.bidomatic_addeditform-content_textarea {
     height: 200px;
 }
