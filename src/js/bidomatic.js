@@ -42,15 +42,16 @@ var bidomatic = {
 
         this.historyData = whetstone.getParam(params.historyData, false);
 
-        this.current = whetstone.getParam(params.current, []);
+        this.current = whetstone.getParam(params.current, {});
         this.history = whetstone.getParam(params.history, false);
 
         this.bidFile = whetstone.getParam(params.bidFile, {});
 
         this.filters = {};
 
-        this.tagOrder = [];
-        this.tagMap = {};
+        this.tagSortOrder = [];
+        this.sortMap = {};
+        this.parsedTags = {};
 
         this.addEntry = function(params) {
             var content = params.content;
@@ -59,13 +60,18 @@ var bidomatic = {
 
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
+            var sequence = whetstone.getParam(params.sequence, true);
 
-            var parsedTags = this._parseTags({source: tags});
             if (!id) {
                 id = whetstone.uuid4();
             }
-            this.current.push({tags: parsedTags, content: content, id: id, tagstring: tags});
 
+            this.current[id] = {content: content, id: id, tagstring: tags};
+            this.parsedTags[id] = this._parseTags({source: tags});
+
+            if (sequence) {
+                this.sequence({id: id});
+            }
             if (index) {
                 this.index();
             }
@@ -82,12 +88,12 @@ var bidomatic = {
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
 
-            var parsedTags = this._parseTags({source: tags});
             var entry = this.getEntry({id: id});
-
-            entry.tags = parsedTags;
             entry.content = content;
             entry.tagstring = tags;
+
+            // parse the tags for their various usages
+            this.parsedTags[id] = this._parseTags({source: tags});
 
             if (index) {
                 this.index();
@@ -103,18 +109,8 @@ var bidomatic = {
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
 
-            var idx = -1;
-            for (var i = 0; i < this.current.length; i++) {
-                var entry = this.current[i];
-                if (entry.id === id) {
-                    idx = i;
-                    break;
-                }
-            }
-
-            if (idx > -1) {
-                this.current.splice(idx, 1);
-            }
+            delete this.current[id];
+            delete this.parsedTags[id];
 
             if (index) {
                 this.index();
@@ -126,11 +122,12 @@ var bidomatic = {
 
         this.getEntry = function(params) {
             var id = params.id;
-            for (var i = 0; i < this.current.length; i++) {
-                var entry = this.current[i];
-                if (entry.id === id) {
-                    return entry;
+            if (id in this.current) {
+                var core = this.current[id];
+                if (id in this.parsedTags) {
+                    core.tags = this.parsedTags[id];
                 }
+                return core;
             }
             return false;
         };
@@ -138,15 +135,49 @@ var bidomatic = {
         this.iterEntries = function() {
             var idx = 0;
             var that = this;
+            var ids = Object.keys(this.current);
 
             return {
                 hasNext : function() {
-                    return idx < that.current.length;
+                    return idx < ids.length;
                 },
                 next: function() {
-                    return that.current[idx++];
+                    return that.getEntry({id: ids[idx++]});
                 }
             };
+        };
+
+        this.sequence = function(params) {
+            var id = params.id;
+            var tags = this.parsedTags[id];
+
+            var seqMap = {};
+            for (var i = 0; i < tags.length; i++) {
+                seqMap[tags[i].path] = tags[i].sequence;
+            }
+
+            var ids = Object.keys(this.parsedTags);
+            for (var i = 0; i < ids.length; i++) {
+                var entry_id = ids[i];
+                if (id === entry_id) {
+                    continue;
+                }
+                var pt = this.parsedTags[entry_id];
+                var changed = false;
+                for (var j = 0; j < pt.length; j++) {
+                    var pe = pt[j];
+                    if (pe.path in seqMap) {
+                        var pos = seqMap[pe.path];
+                        if (pos <= pe.sequence) {
+                            this._incrementTag({tag: pe, by: 1});
+                            changed = true;
+                        }
+                    }
+                }
+                if (changed) {
+                    this.current[id].tagstring = this._serialiseTags({tags: pt});
+                }
+            }
         };
 
         this.setHistoryData = function(params) {
@@ -171,23 +202,26 @@ var bidomatic = {
         };
 
         this.index = function() {
-            this.tagMap = {};
-            this.tagOrder = [];
+            this.sortMap = {};
+            this.tagSortOrder = [];
 
-            // create the sort order
-            for (var i = 0; i < this.current.length; i++) {
-                var row = this.current[i];
+            // iterate through the content and index each row
+            var iter = this.iterEntries();
+            while (iter.hasNext()) {
+                var row = iter.next();
+
+                // sort out the tag ordering
                 for (var j = 0; j < row.tags.length; j++) {
                     var tag = row.tags[j];
-                    this.tagOrder.push(tag.sort);
-                    if (!(tag.sort in this.tagMap)) {
-                        this.tagMap[tag.sort] = [];
+                    this.tagSortOrder.push(tag.sort);
+                    if (!(tag.sort in this.sortMap)) {
+                        this.sortMap[tag.sort] = [];
                     }
-                    this.tagMap[tag.sort].push(row.id);
+                    this.sortMap[tag.sort].push(row.id);
                 }
             }
 
-            this.tagOrder.sort();
+            this.tagSortOrder.sort();
         };
 
         this._parseTags = function(params) {
@@ -214,6 +248,24 @@ var bidomatic = {
             }
 
             return parsed;
+        };
+
+        this._incrementTag = function(params) {
+            var tag = params.tag;
+            var by = whetstone.getParam(params.by, 1);
+            tag.sequence += by;
+            tag.raw = tag.path + ":" + String(tag.sequence);
+            delete tag.sort;
+            tag.sort = this._sortingTag(tag);
+        };
+
+        this._serialiseTags = function(params) {
+            var tags = params.tags;
+            var ts = [];
+            for (var i = 0; i < tags.length; i++) {
+                ts.push(tags[i].path + ":" + String(tags[i].sequence))
+            }
+            return ts.join("|");
         };
 
         this._sortingTag = function(tagEntry) {
@@ -351,7 +403,7 @@ var bidomatic = {
                             var content = row["Content"];
                             var tags = row["Tags"];
                             var id = String(row["ID"]);
-                            that.application.addEntry({tagstring: tags, content: content, id: id, index: false, cycle: false});
+                            that.application.addEntry({tagstring: tags, content: content, id: id, index: false, cycle: false, sequence: false});
                         }
                     } else if (entry.type === "history") {
                         that.application.setHistoryData({data : data});
@@ -503,7 +555,7 @@ var bidomatic = {
         this.addPathFilter = function(params) {
             var path = params.path;
             this.application.addFilters({tag: path});
-        }
+        };
 
         this.clearPathFilter = function() {
             this.application.clearFilters({filters: ["tag"]});
@@ -593,15 +645,15 @@ var bidomatic = {
             this.entries = [];
             this.relevantTags = [];
 
-            for (var i = 0; i < this.application.tagOrder.length ; i++) {
+            for (var i = 0; i < this.application.tagSortOrder.length ; i++) {
                 if (this.entries.length > this.limit) {
                     break;
                 }
-                var tag = this.application.tagOrder[i];
+                var tag = this.application.tagSortOrder[i];
                 if (!this._filter(tag)) {
                     continue;
                 }
-                var entry_ids = this.application.tagMap[tag];
+                var entry_ids = this.application.sortMap[tag];
                 for (var j = 0; j < entry_ids.length; j++) {
                     var id = entry_ids[j];
                     var entry = this.application.getEntry({id: id});
