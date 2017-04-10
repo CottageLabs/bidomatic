@@ -571,8 +571,13 @@ var bidomatic = {
         this.draw = function() {
             var allClass = whetstone.css_classes(this.namespace, "all", this);
             var linkClass = whetstone.css_classes(this.namespace, "link", this);
+            var selectedClass = whetstone.css_classes(this.namespace, "selected", this);
 
-            var frag = '<a href="#" class="' + allClass + '">[show all]</a><br>';
+            var allSelected = "";
+            if (this.component.tagFilter === false) {
+                allSelected = selectedClass;
+            }
+            var frag = '<a href="#" class="' + allClass + ' ' + allSelected + '">[show all]</a><br>';
             frag += this._drawLevel({context: this.component.tags, linkClass: linkClass, path: ""});
             this.component.context.html(frag);
 
@@ -606,13 +611,11 @@ var bidomatic = {
                 if (path !== "") {
                     subPath = path + "/" + key;
                 }
-                var startBold = "";
-                var endBold = "";
+                var selectedClass = "";
                 if (this.component.tagFilter && this.component.tagFilter === subPath) {
-                    startBold = "<strong>";
-                    endBold = "</strong>";
+                    selectedClass = whetstone.css_classes(this.namespace, "selected", this);
                 }
-                frag += "<li><a href='#' class='" + linkClass + "' data-path='" + subPath + "'>" + startBold + whetstone.escapeHtml(key) + endBold + "</a>";
+                frag += "<li><a href='#' class='" + linkClass + " " + selectedClass + "' data-path='" + subPath + "'>" + whetstone.escapeHtml(key) + "</a>";
                 var children = context[key];
                 var ckeys = Object.keys(children);
                 if (ckeys.length > 0) {

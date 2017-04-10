@@ -30,3 +30,7 @@
 .bidomatic_addeditform-content_textarea {
     height: 200px;
 }
+
+.bidomatic_tagsbrowser-selected {
+    font-weight: bold;
+}
