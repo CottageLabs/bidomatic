@@ -666,6 +666,84 @@ var whetstone = {
         }
     },
 
+    dateFormat : function(params) {
+        var format = params.format;
+        var utc = whetstone.getParam(params.utc, true);
+
+        var metas = [
+            "H", "M", "d", "b", "Y", "-M", "-A"
+        ];
+        var present = [];
+        for (var i = 0; i < metas.length; i++) {
+            var meta = metas[i];
+            var rx = "%" + meta;
+            if (format.search(rx) > -1) {
+                present.push(meta);
+            }
+        }
+
+        var twoDigit = whetstone.numFormat({
+            zeroPadding: 2
+        });
+
+        var abbrMonths = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ];
+
+        return function(dateObj) {
+            var working = format;
+            for (var i = 0; i < present.length; i++) {
+                var meta = present[i];
+                var val = "";
+                if (meta === "H") {
+                    val = twoDigit(dateObj.getUTCHours());
+                } else if (meta === "M") {
+                    val = twoDigit(dateObj.getUTCMinutes());
+                } else if (meta === "d") {
+                    val = twoDigit(dateObj.getUTCDate());
+                } else if (meta === "b") {
+                    val = abbrMonths[dateObj.getUTCMonth()];
+                } else if (meta === "Y") {
+                    val = String(dateObj.getUTCFullYear());
+                } else if (meta === "-M") {
+                    var now = new Date();
+                    var seconds = (now - dateObj) / 1000;
+                    var minutes = seconds / 60;
+                    val = String(Math.floor(minutes));
+                } else if (meta === "-A") {
+                    var now = new Date();
+                    var seconds = (now - dateObj) / 1000;
+                    if (seconds < 20) {
+                        val = "a few seconds";
+                    } else if (seconds < 60) {
+                        val = "less than a minute";
+                    } else if (seconds < 120) {
+                        val = "a minute";
+                    } else {
+                        var minutes = Math.floor(seconds / 60);
+                        if (minutes < 60) {
+                            val = String(minutes) + " minutes";
+                        } else if (minutes === 60) {
+                            val = "an hour";
+                        } else {
+                            var hours = Math.floor(minutes / 60);
+                            if (hours === 1) {
+                                val = "over an hour";
+                            } else if (hours < 24) {
+                                val = String(hours) + " hours";
+                            } else {
+                                var days = Math.floor(hours / 24);
+                                val = String(days) + " days";
+                            }
+                        }
+                    }
+                }
+                working = working.replace("%" + meta, val);
+            }
+            return working;
+        }
+    },
+
     uuid4 : function() {
         var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
