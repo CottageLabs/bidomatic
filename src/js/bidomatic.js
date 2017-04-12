@@ -53,6 +53,8 @@ var bidomatic = {
         this.sortMap = {};
         this.parsedTags = {};
 
+        this.currentModified = false;
+
         this.addEntry = function(params) {
             var content = params.content;
             var id = params.id;
@@ -61,6 +63,7 @@ var bidomatic = {
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
             var sequence = whetstone.getParam(params.sequence, true);
+            var modified = whetstone.getParam(params.modified, true);
 
             if (!id) {
                 id = whetstone.uuid4();
@@ -68,6 +71,9 @@ var bidomatic = {
 
             this.current[id] = {content: content, id: id, tagstring: tags};
             this.parsedTags[id] = this._parseTags({source: tags});
+            if (modified) {
+                this.currentModified = true;
+            }
 
             if (sequence) {
                 this.sequence({id: id});
@@ -87,6 +93,7 @@ var bidomatic = {
 
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
+            var modified = whetstone.getParam(params.modified, true);
 
             var entry = this.getEntry({id: id});
             entry.content = content;
@@ -94,6 +101,10 @@ var bidomatic = {
 
             // parse the tags for their various usages
             this.parsedTags[id] = this._parseTags({source: tags});
+
+            if (modified) {
+                this.currentModified = true;
+            }
 
             if (index) {
                 this.index();
@@ -108,9 +119,14 @@ var bidomatic = {
 
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
+            var modified = whetstone.getParam(params.modified, true);
 
             delete this.current[id];
             delete this.parsedTags[id];
+
+            if (modified) {
+                this.currentModified = true;
+            }
 
             if (index) {
                 this.index();
@@ -156,6 +172,7 @@ var bidomatic = {
                 seqMap[tags[i].path] = tags[i].sequence;
             }
 
+            var modified = false;
             var ids = Object.keys(this.parsedTags);
             for (var i = 0; i < ids.length; i++) {
                 var entry_id = ids[i];
@@ -175,9 +192,19 @@ var bidomatic = {
                     }
                 }
                 if (changed) {
-                    this.current[id].tagstring = this._serialiseTags({tags: pt});
+                    this.current[entry_id].tagstring = this._serialiseTags({tags: pt});
+                    modified = true;
                 }
             }
+
+            if (modified) {
+                this.currentModified = true;
+            }
+        };
+
+        this.setNotModified = function() {
+            this.currentModified = false;
+            this.cycle();
         };
 
         this.setHistoryData = function(params) {
@@ -403,7 +430,7 @@ var bidomatic = {
                             var content = row["Content"];
                             var tags = row["Tags"];
                             var id = String(row["ID"]);
-                            that.application.addEntry({tagstring: tags, content: content, id: id, index: false, cycle: false, sequence: false});
+                            that.application.addEntry({tagstring: tags, content: content, id: id, index: false, cycle: false, sequence: false, modified: false});
                         }
                     } else if (entry.type === "history") {
                         that.application.setHistoryData({data : data});
@@ -469,6 +496,8 @@ var bidomatic = {
         this.draw = function() {
             var containerClass = whetstone.css_classes(this.namespace, "container");
             var componentClass = whetstone.css_classes(this.namespace, "component");
+            var controlClass = whetstone.css_classes(this.namespace, "control");
+            var controlComponentClass = whetstone.css_classes(this.namespace, "comp-cont");
 
             var frag = '<div class="container"><div class="' + containerClass + '">\
                     <div class="row"><div class="col-md-6">{{CONTROL}}</div><div class="col-md-6">{{INFO}}</div></div>\
@@ -487,10 +516,10 @@ var bidomatic = {
                 rhsFrag += '<div class="' + componentClass + '"><div id="' + rhs[i].id + '"></div></div>';
             }
 
-            var controlFrag = '<div class="row">';
+            var controlFrag = '<div class="' + controlClass + '">';
             var control = this.application.category("dm.control");
             for (var i = 0; i < control.length; i++) {
-                controlFrag += '<div class="col-md-3"><div class="' + componentClass + '"><div id="' + control[i].id + '"></div></div></div>';
+                controlFrag += '<div class="' + controlComponentClass + '"><div id="' + control[i].id + '"></div></div>';
             }
             controlFrag += "</div>";
 
@@ -946,6 +975,14 @@ var bidomatic = {
         return whetstone.instantiate(bidomatic.SaveButton, params, whetstone.newComponent);
     },
     SaveButton : function(params) {
+
+        this.active = false;
+        this.lastSaved = false;
+
+        this.synchronise = function() {
+            this.active = this.application.currentModified;
+        };
+
         this.save = function() {
             var raw = [];
             var iter = this.application.iterEntries();
@@ -964,6 +1001,9 @@ var bidomatic = {
                 filename: "current.csv",
                 mimetype: "text/plain"
             });
+
+            this.lastSaved = new Date();
+            this.application.setNotModified();
         }
     },
 
@@ -973,15 +1013,44 @@ var bidomatic = {
     SaveButtonRend : function(params) {
         this.namespace = "bidomatic_savebutton";
 
+        this.dateFormatter = whetstone.dateFormat({format: "%H:%M on %d %b %Y (%-A ago)"});
+
+        this.refresher = false;
+
         this.draw = function() {
+            if (this.refresher !== false) {
+                clearTimeout(this.refresher);
+                this.refresher = false;
+            }
+
             var componentClass = whetstone.css_classes(this.namespace, "component", this);
             var buttonId = whetstone.css_id(this.namespace, "save", this);
 
-            var frag = '<div class="' + componentClass + '"><button type="button" id="' + buttonId + '" class="btn btn-info">Save</button></div>';
+            var lastSaved = "never";
+            if (this.component.lastSaved !== false) {
+                lastSaved = this.dateFormatter(this.component.lastSaved);
+            }
+
+            var unsaved = "";
+            var btnClasses = "";
+            var btnDisabled = 'disabled="disabled"';
+            if (this.component.active) {
+                unsaved = "You have unsaved changes<br>";
+                btnClasses = "btn-info";
+                btnDisabled = "";
+            }
+            
+            var frag = '<div class="' + componentClass + '">\
+                <button type="button" id="' + buttonId + '" class="btn ' + btnClasses + '" ' + btnDisabled + '>Save</button>\
+                ' + unsaved + 'last saved: ' + lastSaved + '\
+                </div>';
             this.component.context.html(frag);
 
             var buttonSelector = whetstone.css_id_selector(this.namespace, "save", this);
             whetstone.on(buttonSelector, "click", this, "saveClicked");
+
+            var refresh = whetstone.objClosure(this, "draw");
+            this.refresher = setTimeout(refresh, 61000);
         };
 
         this.saveClicked = function(element) {

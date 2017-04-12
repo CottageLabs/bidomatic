@@ -34,3 +34,8 @@
 .bidomatic_tagsbrowser-selected {
     font-weight: bold;
 }
+
+.bidomatic_dmtemplate-comp-cont {
+    float: left;
+    padding-right: 10px;
+}
