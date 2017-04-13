@@ -1097,6 +1097,7 @@ var bidomatic = {
     },
     AddEditFormRend : function(params) {
         this.namespace = "bidomatic_addeditform";
+        this.markdown = new showdown.Converter();
 
         this.draw = function() {
             if (!this.component.visible) {
@@ -1107,9 +1108,12 @@ var bidomatic = {
             var componentClass = whetstone.css_classes(this.namespace, "component", this);
             var textareaId = whetstone.css_id(this.namespace, "content", this);
             var contentClass = whetstone.css_classes(this.namespace, "content_textarea", this);
+            var previewClass = whetstone.css_classes(this.namespace, "preview", this);
+
             var tagsId = whetstone.css_id(this.namespace, "tags", this);
             var saveId = whetstone.css_id(this.namespace, "save", this);
             var cancelId = whetstone.css_id(this.namespace, "cancel", this);
+            var previewId = whetstone.css_id(this.namespace, "preview_" + this.component.entry.id, this);
 
             var content = "";
             var tags = "";
@@ -1128,6 +1132,7 @@ var bidomatic = {
             }
 
             var frag = '<div class="' + componentClass + '">\
+                    <div id="' + previewId + '" class="' + previewClass + '"></div>\
                     <textarea name="' + textareaId + '" id="' + textareaId + '" placeholder="content" style="width:100%" class="' + contentClass + '">' + content + '</textarea>\
                     <textarea name="' + tagsId + '" id="' + tagsId + '" placeholder="tags (X/Y:seq|Z:seq)" style="width: 100%">' + tags + '</textarea>\
                     <button type="button" id="' + saveId + '" class="btn btn-success" data-id="' + id + '">Save</button>\
@@ -1141,11 +1146,16 @@ var bidomatic = {
                 el.height(el[0].scrollHeight);
             }
 
+            this.preview();
+
             var saveSelector = whetstone.css_id_selector(this.namespace, "save", this);
             whetstone.on(saveSelector, "click", this, "saveClicked");
 
             var cancelSelector = whetstone.css_id_selector(this.namespace, "cancel", this);
             whetstone.on(cancelSelector, "click", this, "cancelClicked");
+
+            var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
+            whetstone.on(contentSelector, "keyup", this, "preview");
         };
 
         this.saveClicked = function(element) {
@@ -1165,6 +1175,16 @@ var bidomatic = {
 
         this.cancelClicked = function(element) {
             this.component.cancel();
+        };
+
+        this.preview = function(element) {
+            var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
+            var previewSelector = whetstone.css_id_selector(this.namespace, "preview_" + this.component.entry.id, this);
+
+            var content = this.component.jq(contentSelector).val();
+            var html = this.markdown.makeHtml(content);
+
+            this.component.jq(previewSelector).html(html);
         }
     },
 

@@ -39,3 +39,9 @@
     float: left;
     padding-right: 10px;
 }
+
+.bidomatic_addeditform-preview {
+    border: 1px dashed #cccccc;
+    padding: 5px;
+    margin: 5px 0px 5px 0px;
+}
