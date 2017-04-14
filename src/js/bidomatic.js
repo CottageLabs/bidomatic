@@ -40,6 +40,8 @@ var bidomatic = {
     },
     Bidomatic : function(params) {
 
+        this.prefixFormat = whetstone.numFormat({zeroPadding: 5});
+
         this.historyData = whetstone.getParam(params.historyData, false);
 
         this.current = whetstone.getParam(params.current, {});
@@ -297,7 +299,8 @@ var bidomatic = {
 
         this._sortingTag = function(tagEntry) {
             if (tagEntry.hasOwnProperty("sequence")) {
-                return tagEntry.path + String(tagEntry.sequence);
+                var seq = this.prefixFormat(tagEntry.sequence);
+                return tagEntry.path + seq;
             } else {
                 return tagEntry.path;
             }
