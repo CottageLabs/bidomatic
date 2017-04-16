@@ -150,19 +150,110 @@ var bidomatic = {
             return false;
         };
 
-        this.iterEntries = function() {
+        this.iterEntries = function(params) {
+            params = whetstone.getParam(params, {});
+            var filter = whetstone.getParam(params.filter, false);
+            var order = whetstone.getParam(params.order, false);
+
+            var idList = this._idList({order: order});
             var idx = 0;
             var that = this;
-            var ids = Object.keys(this.current);
 
             return {
-                hasNext : function() {
-                    return idx < ids.length;
+                _next : false,
+                _seekNext : function() {
+                    if (this._next != false) {
+                        return;
+                    }
+                    while (idx < idList.ids.length) {
+                        var id = idList.ids[idx];
+                        var sort_context = false;
+                        if (idList.sort_context.length > idx) {
+                            var sort_context = idList.sort_context[idx];
+                        }
+                        idx++;
+
+                        if (filter) {
+                            this._next = that._filter({id: id});
+                        } else {
+                            this._next = that.getEntry({id: id});
+                        }
+                        if (this._next != false) {
+                            if (sort_context != false) {
+                                this._next.context_tag = this._getHeaderTag({entry: this._next, sortTag: sort_context});
+                            }
+                            break;
+                        }
+                    }
+
                 },
-                next: function() {
-                    return that.getEntry({id: ids[idx++]});
+                _getHeaderTag : function(params) {
+                    var entry = params.entry;
+                    var sortTag = params.sortTag;
+
+                    for (var i = 0; i < entry.tags.length; i++) {
+                        var tag = entry.tags[i];
+                        if (tag.sort === sortTag) {
+                            return tag.path;
+                        }
+                    }
+                    return "";
+                },
+                hasNext : function() {
+                    this._seekNext();
+                    return this._next != false;
+                },
+                next : function() {
+                    this._seekNext();
+                    if (this._next != false) {
+                        var n = this._next;
+                        this._next = false;
+                        return n;
+                    }
+                    return false;
                 }
             };
+        };
+
+        this._idList = function(params) {
+            var order = whetstone.getParam(params.order, false);
+
+            var sort_context = [];
+            var ids = [];
+            if (order) {
+                for (var i = 0; i < this.tagSortOrder.length ; i++) {
+                    var tag = this.tagSortOrder[i];
+                    var entry_ids = this.sortMap[tag];
+                    for (var j = 0; j < entry_ids.length; j++) {
+                        ids.push(entry_ids[j]);
+                        sort_context.push(tag);
+                    }
+                }
+            } else {
+                ids = Object.keys(this.current);
+            }
+
+            return {ids: ids, sort_context: sort_context};
+        };
+
+        this._filter = function(params) {
+            var id = params.id;
+
+            if (!this.filters.hasOwnProperty("tag")) {
+                return this.getEntry({id: id});
+            }
+
+            var tags = this.parsedTags[id];
+            var tagFilter = this.filters.tag;
+
+            for (var i = 0; i < tags.length; i++) {
+                var tag = tags[i];
+                if (whetstone.startswith(tag.path, tagFilter)) {
+                    return this.getEntry({id: id});
+                }
+            }
+
+            return false;
         };
 
         this.sequence = function(params) {
@@ -671,30 +762,15 @@ var bidomatic = {
         return whetstone.instantiate(bidomatic.ContentViewer, params, whetstone.newComponent);
     },
     ContentViewer : function(params) {
-        this.limit = whetstone.getParam(params.limit, 10);
-
         this.entries = [];
-        this.relevantTags = [];
 
         this.synchronise = function() {
             this.entries = [];
-            this.relevantTags = [];
 
-            for (var i = 0; i < this.application.tagSortOrder.length ; i++) {
-                if (this.entries.length > this.limit) {
-                    break;
-                }
-                var tag = this.application.tagSortOrder[i];
-                if (!this._filter(tag)) {
-                    continue;
-                }
-                var entry_ids = this.application.sortMap[tag];
-                for (var j = 0; j < entry_ids.length; j++) {
-                    var id = entry_ids[j];
-                    var entry = this.application.getEntry({id: id});
-                    this.entries.push(entry);
-                    this.relevantTags.push(this._getHeaderTag({entry: entry, sortTag: tag}));
-                }
+            var iter = this.application.iterEntries({filter: true, order: true});
+            while (iter.hasNext()) {
+                var entry = iter.next();
+                this.entries.push({id : entry.id, context_tag: entry.context_tag});
             }
         };
 
@@ -726,25 +802,21 @@ var bidomatic = {
             this.application.removeEntry({id : id});
         };
 
-        this._filter = function(sortTag) {
-            if (!this.application.filters.hasOwnProperty("tag")) {
-                return true;
-            }
-            var tagFilter = this.application.filters.tag;
-            return whetstone.startswith(sortTag, tagFilter);
-        };
+        this.iterEntries = function() {
+            var idx = 0;
+            var that = this;
 
-        this._getHeaderTag = function(params) {
-            var entry = params.entry;
-            var sortTag = params.sortTag;
-
-            for (var i = 0; i < entry.tags.length; i++) {
-                var tag = entry.tags[i];
-                if (tag.sort === sortTag) {
-                    return tag.path;
+            return {
+                hasNext : function() {
+                    return idx < that.entries.length;
+                },
+                next : function() {
+                    var entry_ref = that.entries[idx++];
+                    var entry = that.application.getEntry({id: entry_ref.id});
+                    entry.context_tag = entry_ref.context_tag;
+                    return entry;
                 }
             }
-            return "";
         };
     },
 
@@ -773,9 +845,11 @@ var bidomatic = {
             var currentTag = false;
             var currentSeq = 0;
             var frag = '<div class="row"><div class="col-md-12"><div class="' + topRowClass + '"><a href="#" class="' + showControlsClass + '">[hide controls]</a></div></div></div>';
-            for (var i = 0; i < this.component.entries.length; i++) {
-                var entry = this.component.entries[i];
-                var tag = this.component.relevantTags[i];
+
+            var iter = this.component.iterEntries();
+            while (iter.hasNext()) {
+                var entry = iter.next();
+                var tag = entry.context_tag;
                 if (tag !== currentTag) {
                     currentTag = tag;
                     frag += '<div class="row"><div class="col-md-12"><div class="' + tagClass + '">' + tag + '</div></div></div>';
