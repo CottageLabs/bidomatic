@@ -695,14 +695,20 @@ var bidomatic = {
             var allClass = whetstone.css_classes(this.namespace, "all", this);
             var linkClass = whetstone.css_classes(this.namespace, "link", this);
             var selectedClass = whetstone.css_classes(this.namespace, "selected", this);
+            var scrollClass = whetstone.css_classes(this.namespace, "scroll", this);
 
             var allSelected = "";
             if (this.component.tagFilter === false) {
                 allSelected = selectedClass;
             }
             var frag = '<a href="#" class="' + allClass + ' ' + allSelected + '">[show all]</a><br>';
+            frag += '<div class="' + scrollClass + '">';
             frag += this._drawLevel({context: this.component.tags, linkClass: linkClass, path: ""});
+            frag += '</div>';
             this.component.context.html(frag);
+
+            this.resizeScrollArea();
+            whetstone.on(window, "resize", this, "resizeScrollArea");
 
             var linkSelector = whetstone.css_class_selector(this.namespace, "link", this);
             whetstone.on(linkSelector, "click", this, "tagSelected");
@@ -718,6 +724,12 @@ var bidomatic = {
 
         this.clearTags = function(element) {
             this.component.clearPathFilter();
+        };
+
+        this.resizeScrollArea = function() {
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            var el = this.component.jq(scrollSelector);
+            whetstone.sizeToVPBottom({jq: el, spacing: 10});
         };
 
         this._drawLevel = function(params) {
@@ -841,11 +853,13 @@ var bidomatic = {
             var insertClass = whetstone.css_classes(this.namespace, "insert", this);
             var deleteClass = whetstone.css_classes(this.namespace, "delete", this);
             var genericControlClass = whetstone.css_classes(this.namespace, "controller", this);
+            var scrollWindow = whetstone.css_classes(this.namespace, "scroll", this);
 
             var currentTag = false;
             var currentSeq = 0;
             var frag = '<div class="row"><div class="col-md-12"><div class="' + topRowClass + '"><a href="#" class="' + showControlsClass + '">[hide controls]</a></div></div></div>';
 
+            frag += '<div class="' + scrollWindow + '">';
             var iter = this.component.iterEntries();
             while (iter.hasNext()) {
                 var entry = iter.next();
@@ -885,7 +899,12 @@ var bidomatic = {
                         <button type="button" class="' + insertClass + ' ' + genericControlClass + '" data-insert="' + insertId + '" data-tag="' + currentTag + '" data-seq="' + String(currentSeq + 1) + '">Insert Paragraph Here</button>\
                     </div></div></div>';
             }
+            frag += "</div>";
+
             this.component.context.html(frag);
+
+            this.resizeScrollArea();
+            whetstone.on(window, "resize", this, "resizeScrollArea");
 
             var showSelector = whetstone.css_class_selector(this.namespace, "showcontrols", this);
             whetstone.on(showSelector, "click", this, "toggleControls");
@@ -983,7 +1002,13 @@ var bidomatic = {
             var genericControlSelector = whetstone.css_class_selector(this.namespace, "controller", this);
             var el = this.component.jq(genericControlSelector);
             el.removeAttr("disabled");
-        }
+        };
+
+        this.resizeScrollArea = function() {
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            var el = this.component.jq(scrollSelector);
+            whetstone.sizeToVPBottom({jq: el, spacing: 10});
+        };
     },
 
     newAddButton : function(params) {
