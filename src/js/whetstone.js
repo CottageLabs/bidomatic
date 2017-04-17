@@ -782,5 +782,15 @@ var whetstone = {
         }
 
         downloadLink.click();
+    },
+
+    sizeToVPBottom : function(params) {
+        var el = params.jq;
+        var spacing = whetstone.getParam(params.spacing, 0);
+
+        var rect = el[0].getBoundingClientRect();
+        var vp = document.documentElement.clientHeight;
+        var height = vp - rect.top - spacing;
+        el.css("height", height + "px");
     }
 };
