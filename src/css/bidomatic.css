@@ -49,9 +49,11 @@
 .bidomatic_contentviewer-scroll {
     overflow-y: scroll;
     overflow-x: hidden;
+    padding-bottom: 300px;
 }
 
 .bidomatic_tagsbrowser-scroll {
     overflow-y: scroll;
     overflow-x: hidden;
+    padding-bottom: 300px;
 }
