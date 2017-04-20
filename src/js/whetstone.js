@@ -60,6 +60,9 @@ var whetstone = {
         // list of all the components that are involved in this edge
         this.components = whetstone.getParam(params.components, []);
 
+        // the jquery context for the application container
+        this.context = undefined;
+
         // start the application.  Must be run first
         this.init = function() {
             // obtain the jquery context for all our operations
@@ -130,7 +133,10 @@ var whetstone = {
         // get the jquery object for the desired element, in the correct context
         // you should ALWAYS use this, rather than the standard jquery $ object
         this.jq = function(selector) {
-            return $(selector, this.context);
+            if (selector) {
+                return $(selector, this.context);
+            }
+            return this.context;
         };
 
         ////////////////////////////////////////////////
