@@ -173,15 +173,16 @@ var bidomatic = {
                         var id = idList.ids[idx];
                         var sort_context = false;
                         if (idList.sort_context.length > idx) {
-                            var sort_context = idList.sort_context[idx];
+                            sort_context = idList.sort_context[idx];
                         }
                         idx++;
 
                         if (filter) {
-                            this._next = that._filter({id: id});
+                            this._next = that._filter({id: id, sort_context: sort_context});
                         } else {
                             this._next = that.getEntry({id: id});
                         }
+
                         if (this._next != false) {
                             if (sort_context != false) {
                                 this._next.context_tag = this._getHeaderTag({entry: this._next, sortTag: sort_context});
@@ -189,7 +190,6 @@ var bidomatic = {
                             break;
                         }
                     }
-
                 },
                 _getHeaderTag : function(params) {
                     var entry = params.entry;
@@ -242,14 +242,22 @@ var bidomatic = {
 
         this._filter = function(params) {
             var id = params.id;
+            var sort_context = params.sort_context;
 
             if (!this.filters.hasOwnProperty("tag")) {
                 return this.getEntry({id: id});
             }
 
-            var tags = this.parsedTags[id];
             var tagFilter = this.filters.tag;
+            if (sort_context != false) {
+                if (whetstone.startswith(sort_context, tagFilter)) {
+                    return this.getEntry({id: id});
+                } else {
+                    return false;
+                }
+            }
 
+            var tags = this.parsedTags[id];
             for (var i = 0; i < tags.length; i++) {
                 var tag = tags[i];
                 if (whetstone.startswith(tag.path, tagFilter)) {
