@@ -54,6 +54,7 @@ var bidomatic = {
         this.tagSortOrder = [];
         this.sortMap = {};
         this.parsedTags = {};
+        this.tagInfo = {};
 
         this.currentModified = false;
 
@@ -73,10 +74,11 @@ var bidomatic = {
 
             this.current[id] = {content: content, id: id, tagstring: tags};
             this.parsedTags[id] = this._parseTags({source: tags});
+            this._setTagSequences({id: id});
+
             if (modified) {
                 this.currentModified = true;
             }
-
             if (sequence) {
                 this.sequence({id: id});
             }
@@ -103,6 +105,7 @@ var bidomatic = {
 
             // parse the tags for their various usages
             this.parsedTags[id] = this._parseTags({source: tags});
+            this._setTagSequences({id: id});
 
             if (modified) {
                 this.currentModified = true;
@@ -330,14 +333,31 @@ var bidomatic = {
             while (iter.hasNext()) {
                 var row = iter.next();
 
-                // sort out the tag ordering
                 for (var j = 0; j < row.tags.length; j++) {
                     var tag = row.tags[j];
+
+                    // sort out the tag ordering
                     this.tagSortOrder.push(tag.sort);
                     if (!(tag.sort in this.sortMap)) {
                         this.sortMap[tag.sort] = [];
                     }
                     this.sortMap[tag.sort].push(row.id);
+
+                    // record the tag info
+                    if (!(tag.path in this.tagInfo)) {
+                        this.tagInfo[tag.path] = {};
+                    }
+                    if (tag.sequence > 0) {
+                        var current = 0;
+                        if (this.tagInfo[tag.path].hasOwnProperty("size")) {
+                            current = this.tagInfo[tag.path]["size"];
+                            if (tag.sequence > current) {
+                                this.tagInfo[tag.path]["size"] = tag.sequence;
+                            }
+                        } else {
+                            this.tagInfo[tag.path]["size"] = tag.sequence;
+                        }
+                    }
                 }
             }
 
@@ -351,19 +371,10 @@ var bidomatic = {
             var allocations = source.split("|");
             for (var i = 0; i < allocations.length; i++) {
                 var allocation = allocations[i];
-                var idx = allocation.lastIndexOf(":");
-                var seqStr = allocation.substring(idx + 1);
-                var seq = parseInt(seqStr);
-                var tagPath = allocation.substring(0, idx);
-                var heirarchy = tagPath.split("/");
-
                 var obj = {
-                    "raw" : allocation,
-                    "path" : tagPath,
-                    "heirarchy" : heirarchy,
-                    "sequence" : seq
+                    "raw" : allocation
                 };
-                obj["sort"] = this._sortingTag(obj);
+                this._normaliseTag({tag: obj, fromRaw: true});
                 parsed.push(obj);
             }
 
@@ -388,12 +399,76 @@ var bidomatic = {
             return ts.join("|");
         };
 
+        this._getUnsequencedTags = function(params) {
+            var tags = params.tags;
+            var unsequenced = [];
+            for (var i = 0; i < tags.length; i++) {
+                var tag = tags[i];
+                if (tag.sequence === -1) {
+                    unsequenced.push(tag);
+                }
+            }
+            return unsequenced;
+        };
+
         this._sortingTag = function(tagEntry) {
             if (tagEntry.hasOwnProperty("sequence")) {
                 var seq = this.prefixFormat(tagEntry.sequence);
                 return tagEntry.path + seq;
             } else {
                 return tagEntry.path;
+            }
+        };
+
+        this._normaliseTag = function(params) {
+            var tag = params.tag;
+            var fromRaw = whetstone.getParam(params.fromRaw, false);
+            var fromPathSeq = whetstone.getParam(params.fromPathSeq, false);
+
+            if (fromRaw) {
+                var idx = tag.raw.lastIndexOf(":");
+                var seq = -1;
+                if (idx !== -1) {
+                    var seqStr = tag.raw.substring(idx + 1);
+                    seq = parseInt(seqStr);
+                } else {
+                    idx = tag.raw.length;
+                }
+
+                var tagPath = tag.raw.substring(0, idx);
+                var hierarchy = tagPath.split("/");
+
+                tag["path"] = tagPath;
+                tag["hierarchy"] = hierarchy;
+                tag["sequence"] = seq;
+            } else if (fromPathSeq) {
+                var hierarchy = tag.path.split("/");
+                tag["raw"] = tag.path + ":" + String(tag.sequence);
+                tag["hierarchy"] = hierarchy;
+            }
+            tag["sort"] = this._sortingTag(tag);
+        };
+
+        this._setTagSequences = function(params) {
+            var id = params.id;
+
+            var unsequenced = this._getUnsequencedTags({tags: this.parsedTags[id]});
+            if (unsequenced.length > 0) {
+                for (var i = 0; i < unsequenced.length; i++) {
+                    var unseqtag = unsequenced[i];
+                    if (unseqtag.path in this.tagInfo) {
+                        var size = this.tagInfo[unseqtag.path].size;
+                        if (size) {
+                            unseqtag.sequence = size + 1;
+                        } else {
+                            unseqtag.sequence = 1;
+                        }
+                    } else {
+                        unseqtag.sequence = 1;
+                    }
+                    this._normaliseTag({tag: unseqtag, fromPathSeq: true});
+                }
+                this.current[id].tagstring = this._serialiseTags({tags: this.parsedTags[id]});
             }
         };
 
@@ -660,8 +735,8 @@ var bidomatic = {
                 for (var j = 0; j < row.tags.length; j++) {
                     var tagEntry = row.tags[j];
                     var context = this.tags;
-                    for (var k = 0; k < tagEntry.heirarchy.length; k++) {
-                        var tagPart = tagEntry.heirarchy[k];
+                    for (var k = 0; k < tagEntry.hierarchy.length; k++) {
+                        var tagPart = tagEntry.hierarchy[k];
                         if (!(tagPart in context)) {
                             context[tagPart] = {}
                         }
