@@ -23,7 +23,8 @@ var bidomatic = {
                 }),
                 bidomatic.newAddButton({
                     category: "dm.control",
-                    controls: "addform"
+                    controls: "addform",
+                    firesOnToggle: "bidomatic:resizeContentViewerScroll"
                 }),
                 bidomatic.newSaveButton({
                     category: "dm.control"
@@ -980,6 +981,7 @@ var bidomatic = {
 
             this.resizeScrollArea();
             whetstone.on(window, "resize", this, "resizeScrollArea");
+            whetstone.on(this.component.jq(), "bidomatic:resizeContentViewerScroll", this, "resizeScrollArea");
 
             var showSelector = whetstone.css_class_selector(this.namespace, "showcontrols", this);
             whetstone.on(showSelector, "click", this, "toggleControls");
@@ -1098,6 +1100,7 @@ var bidomatic = {
     },
     AddButton : function(params) {
         this.controls = whetstone.getParam(params.controls, "addform");
+        this.firesOnToggle = whetstone.getParam(params.firesOnToggle, false);
 
         this.init = function(application) {
             whetstone.up(this, "init", [application]);
@@ -1108,6 +1111,9 @@ var bidomatic = {
             var comp = this.application.getComponent({id: this.controls});
             comp.toggleVisible();
             comp.draw();
+            if (this.firesOnToggle) {
+                this.application.jq().trigger(this.firesOnToggle);
+            }
         };
 
         this.setupControls = function() {
