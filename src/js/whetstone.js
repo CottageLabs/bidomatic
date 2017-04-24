@@ -798,5 +798,30 @@ var whetstone = {
         var vp = document.documentElement.clientHeight;
         var height = vp - rect.top - spacing;
         el.css("height", height + "px");
+    },
+    
+    scrollIntoView : function(params) {
+        var scrollParent = params.scrollParent;
+        var scrollElement = params.scrollElement;
+        var ifNeeded = whetstone.getParam(params.ifNeeded, false);
+        var duration = whetstone.getParam(params.duration, 200);
+
+        if (ifNeeded) {
+            var elRect = scrollElement[0].getBoundingClientRect();
+            var scrollRect = scrollParent[0].getBoundingClientRect();
+
+            if (elRect.top < scrollRect.bottom &&
+                elRect.bottom > scrollRect.top &&
+                elRect.left < scrollRect.right &&
+                elRect.right > scrollRect.left) {
+                return;
+            }
+        }
+
+        scrollParent.animate({
+                scrollTop: scrollElement.offset().top - scrollParent.offset().top + scrollParent.scrollTop()
+            },
+            duration
+        );
     }
 };
