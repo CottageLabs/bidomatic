@@ -44,9 +44,9 @@ var bidomatic = {
         this.prefixFormat = whetstone.numFormat({zeroPadding: 5});
 
         this.historyData = whetstone.getParam(params.historyData, false);
+        this.history = whetstone.getParam(params.history, false);
 
         this.current = whetstone.getParam(params.current, {});
-        this.history = whetstone.getParam(params.history, false);
 
         this.bidFile = whetstone.getParam(params.bidFile, {});
 
@@ -59,6 +59,9 @@ var bidomatic = {
 
         this.currentModified = false;
 
+        this.actions = [];
+        this.actionsMax = whetstone.getParam(params.actionsMax, 10);
+
         this.addEntry = function(params) {
             var content = params.content;
             var id = params.id;
@@ -68,6 +71,7 @@ var bidomatic = {
             var cycle = whetstone.getParam(params.cycle, true);
             var sequence = whetstone.getParam(params.sequence, true);
             var modified = whetstone.getParam(params.modified, true);
+            var addType = whetstone.getParam(params.type, "add");
 
             if (!id) {
                 id = whetstone.uuid4();
@@ -78,6 +82,7 @@ var bidomatic = {
             this._setTagSequences({id: id});
 
             if (modified) {
+                this.recordAction({entry_id: id, action: "add", type: addType, context_tag: false});
                 this.currentModified = true;
             }
             if (sequence) {
@@ -99,6 +104,7 @@ var bidomatic = {
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
             var modified = whetstone.getParam(params.modified, true);
+            var updateType = whetstone.getParam(params.type, "edit");
 
             var entry = this.getEntry({id: id});
             entry.content = content;
@@ -109,6 +115,7 @@ var bidomatic = {
             this._setTagSequences({id: id});
 
             if (modified) {
+                this.recordAction({entry_id: id, action: "edit", type: updateType, context_tag: false});
                 this.currentModified = true;
             }
 
@@ -126,11 +133,13 @@ var bidomatic = {
             var index = whetstone.getParam(params.index, true);
             var cycle = whetstone.getParam(params.cycle, true);
             var modified = whetstone.getParam(params.modified, true);
+            var removeType = whetstone.getParam(params.type, "delete");
 
             delete this.current[id];
             delete this.parsedTags[id];
 
             if (modified) {
+                this.recordAction({entry_id: id, action: "delete", type: removeType, context_tag: false});
                 this.currentModified = true;
             }
 
@@ -217,6 +226,27 @@ var bidomatic = {
                     return false;
                 }
             };
+        };
+
+        this.recordAction = function(params) {
+            var obj = {
+                entry_id : params.entry_id,
+                action: params.action,
+                context_tag: params.context_tag,
+                type: params.type,
+                datestamp: new Date()
+            };
+            this.actions.unshift(obj);
+            if (this.actions.length > this.actionsMax) {
+                this.actions.splice(this.actionsMax, this.actions.length);
+            }
+        };
+
+        this.getLastAction = function() {
+            if (this.actions.length > 0) {
+                return this.actions[0];
+            }
+            return false;
         };
 
         this._idList = function(params) {
@@ -859,14 +889,23 @@ var bidomatic = {
     },
     ContentViewer : function(params) {
         this.entries = [];
+        this.lastAction = false;
+        this.oldLastAction = false;
 
         this.synchronise = function() {
             this.entries = [];
+            this.lastAction = false;
 
             var iter = this.application.iterEntries({filter: true, order: true});
             while (iter.hasNext()) {
                 var entry = iter.next();
                 this.entries.push({id : entry.id, context_tag: entry.context_tag});
+            }
+
+            var action = this.application.getLastAction();
+            if (action !== false && action.datestamp !== this.oldLastAction.datestamp) {
+                this.lastAction = action;
+                this.oldLastAction = action;
             }
         };
 
@@ -924,8 +963,11 @@ var bidomatic = {
         this.markdown = new showdown.Converter();
 
         this.restore = "";
+        this.scrollPointTag = "";
 
         this.draw = function() {
+            this.scrollPointTag = "";
+
             var entryClass = whetstone.css_classes(this.namespace, "component", this);
             var tagClass = whetstone.css_classes(this.namespace, "tag", this);
             var controlsClass = whetstone.css_classes(this.namespace, "controls", this);
@@ -961,6 +1003,10 @@ var bidomatic = {
                 }
                 var content = this.markdown.makeHtml(entry["content"]);
 
+                if (this.component.lastAction !== false && entry.id === this.component.lastAction.entry_id && this.scrollPointTag === "") {
+                    this.scrollPointTag = currentTag;
+                }
+
                 var entryTags = [];
                 for (var j = 0; j < entry.tags.length; j++) {
                     entryTags.push(entry.tags[j].raw);
@@ -990,6 +1036,8 @@ var bidomatic = {
             this.resizeScrollArea();
             whetstone.on(window, "resize", this, "resizeScrollArea");
             whetstone.on(this.component.jq(), "bidomatic:resizeContentViewerScroll", this, "resizeScrollArea");
+
+            this.setScrollPoint();
 
             var showSelector = whetstone.css_class_selector(this.namespace, "showcontrols", this);
             whetstone.on(showSelector, "click", this, "toggleControls");
@@ -1069,6 +1117,10 @@ var bidomatic = {
                 whetstone.on(insertSelector, "click", that, "insertEntry");
             };
 
+            comp.contextParams = {
+                type: "insert"
+            };
+
             this.disableEditButtons();
 
             this.restore = el.html();
@@ -1093,6 +1145,30 @@ var bidomatic = {
             var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
             var el = this.component.jq(scrollSelector);
             whetstone.sizeToVPBottom({jq: el, spacing: 10});
+        };
+
+        this.setScrollPoint = function() {
+            var action = this.component.lastAction;
+            if (!action) {
+                return;
+            }
+            var rowIdSelector = whetstone.css_id_selector(this.namespace, "row_" + action.entry_id + "_" + whetstone.safeId(this.scrollPointTag), this);
+            var row = this.component.jq(rowIdSelector);
+
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            var scrollDiv = this.component.jq(scrollSelector);
+
+            var duration = 0;
+            if (action.type === "add") {
+                duration = 300;
+            }
+
+            whetstone.scrollIntoView({
+                scrollParent: scrollDiv,
+                scrollElement: row,
+                ifNeeded: true,
+                duration: duration
+            })
         };
     },
 
@@ -1263,12 +1339,14 @@ var bidomatic = {
         this.visible = whetstone.getParam(params.visible, false);
         this.entry = whetstone.getParam(params.entry, false);
         this.oncancel = whetstone.getParam(params.oncancel, false);
+        this.contextParams = whetstone.getParam(params.contextParams, {});
 
         this.toggleVisible = function() {
             this.visible = !this.visible;
         };
 
         this.addContent = function(params) {
+            params = whetstone.overlay(params, this.contextParams);
             if (params.id) {
                 this.application.updateEntry(params);
             } else {
@@ -1361,6 +1439,7 @@ var bidomatic = {
             if (id !== "") {
                 obj["id"] = id;
             }
+
             this.component.addContent(obj);
         };
 
