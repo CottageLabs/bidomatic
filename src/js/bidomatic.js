@@ -963,7 +963,9 @@ var bidomatic = {
         this.markdown = new showdown.Converter();
 
         this.restore = "";
+
         this.scrollPointTag = "";
+        this.lastActionOffset = 0;
 
         this.draw = function() {
             this.scrollPointTag = "";
@@ -1078,6 +1080,12 @@ var bidomatic = {
                 that.enableEditButtons();
             };
 
+            comp.beforeAdd = function() {
+                var scrollSelector = whetstone.css_class_selector(that.namespace, "scroll", that);
+                var scrollDiv = that.component.jq(scrollSelector);
+                that.lastActionOffset = whetstone.scrollDistanceToParent({scrollParent: scrollDiv, scrollElement: el});
+            };
+
             this.disableEditButtons();
 
             this.restore = el.html();
@@ -1115,6 +1123,12 @@ var bidomatic = {
 
                 var insertSelector = whetstone.css_class_selector(that.namespace, "insert", that);
                 whetstone.on(insertSelector, "click", that, "insertEntry");
+            };
+
+            comp.beforeAdd = function() {
+                var scrollSelector = whetstone.css_class_selector(that.namespace, "scroll", that);
+                var scrollDiv = that.component.jq(scrollSelector);
+                that.lastActionOffset = whetstone.scrollDistanceToParent({scrollParent: scrollDiv, scrollElement: el});
             };
 
             comp.contextParams = {
@@ -1158,16 +1172,23 @@ var bidomatic = {
             var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
             var scrollDiv = this.component.jq(scrollSelector);
 
+            var topOffset = 0;
             var duration = 0;
             if (action.type === "add") {
                 duration = 300;
+                topOffset = 30;
+            } else if (action.type === "insert") {
+                topOffset = this.lastActionOffset;
+            } else if (action.type === "edit") {
+                topOffset = this.lastActionOffset;
             }
 
             whetstone.scrollIntoView({
                 scrollParent: scrollDiv,
                 scrollElement: row,
                 ifNeeded: true,
-                duration: duration
+                duration: duration,
+                topOffset: topOffset
             })
         };
     },
@@ -1340,12 +1361,16 @@ var bidomatic = {
         this.entry = whetstone.getParam(params.entry, false);
         this.oncancel = whetstone.getParam(params.oncancel, false);
         this.contextParams = whetstone.getParam(params.contextParams, {});
+        this.beforeAdd = whetstone.getParam(params.beforeAdd, false);
 
         this.toggleVisible = function() {
             this.visible = !this.visible;
         };
 
         this.addContent = function(params) {
+            if (this.beforeAdd) {
+                this.beforeAdd();
+            }
             params = whetstone.overlay(params, this.contextParams);
             if (params.id) {
                 this.application.updateEntry(params);

@@ -805,6 +805,7 @@ var whetstone = {
         var scrollElement = params.scrollElement;
         var ifNeeded = whetstone.getParam(params.ifNeeded, false);
         var duration = whetstone.getParam(params.duration, 200);
+        var topOffset = whetstone.getParam(params.topOffset, 0);
 
         if (ifNeeded) {
             var elRect = scrollElement[0].getBoundingClientRect();
@@ -818,10 +819,18 @@ var whetstone = {
             }
         }
 
+        var pos = scrollElement.offset().top - scrollParent.offset().top + scrollParent.scrollTop() - topOffset;
+
         scrollParent.animate({
-                scrollTop: scrollElement.offset().top - scrollParent.offset().top + scrollParent.scrollTop()
+                scrollTop: pos
             },
             duration
         );
+    },
+
+    scrollDistanceToParent : function(params) {
+        var scrollParent = params.scrollParent;
+        var scrollElement = params.scrollElement;
+        return scrollElement.offset().top - scrollParent.offset().top
     }
 };
