@@ -1301,7 +1301,7 @@ var bidomatic = {
     SaveButtonRend : function(params) {
         this.namespace = "bidomatic_savebutton";
 
-        this.dateFormatter = whetstone.dateFormat({format: "%H:%M on %d %b %Y (%-A ago)"});
+        this.dateFormatter = whetstone.dateFormat({format: "%H:%M on %d %b %Y (%-A ago)", utc: false});
 
         this.refresher = false;
 

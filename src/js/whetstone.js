@@ -696,21 +696,39 @@ var whetstone = {
             "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         ];
 
+        var functions = {
+            "hours" : "getUTCHours",
+            "minutes" : "getUTCMinutes",
+            "date" : "getUTCDate",
+            "month" : "getUTCMonth",
+            "full_year" : "getUTCFullYear"
+        };
+        if (!utc) {
+            functions = {
+                "hours" : "getHours",
+                "minutes" : "getMinutes",
+                "date" : "getDate",
+                "month" : "getMonth",
+                "full_year" : "getFullYear"
+            };
+        }
+
         return function(dateObj) {
             var working = format;
             for (var i = 0; i < present.length; i++) {
                 var meta = present[i];
                 var val = "";
                 if (meta === "H") {
-                    val = twoDigit(dateObj.getUTCHours());
+                    // val = twoDigit(dateObj.getUTCHours());
+                    val = twoDigit(dateObj[functions["hours"]]())
                 } else if (meta === "M") {
-                    val = twoDigit(dateObj.getUTCMinutes());
+                    val = twoDigit(dateObj[functions["minutes"]]());
                 } else if (meta === "d") {
-                    val = twoDigit(dateObj.getUTCDate());
+                    val = twoDigit(dateObj[functions["date"]]());
                 } else if (meta === "b") {
-                    val = abbrMonths[dateObj.getUTCMonth()];
+                    val = abbrMonths[dateObj[functions["month"]]()];
                 } else if (meta === "Y") {
-                    val = String(dateObj.getUTCFullYear());
+                    val = String(dateObj[functions["full_year"]]());
                 } else if (meta === "-M") {
                     var now = new Date();
                     var seconds = (now - dateObj) / 1000;
