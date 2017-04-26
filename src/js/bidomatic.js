@@ -1267,6 +1267,11 @@ var bidomatic = {
         this.active = false;
         this.lastSaved = false;
 
+        this.init = function(application) {
+            whetstone.up(this, "init", [application]);
+            whetstone.on(window, "keydown", this, "captureKey", false, false, false);
+        };
+
         this.synchronise = function() {
             this.active = this.application.currentModified;
         };
@@ -1292,7 +1297,20 @@ var bidomatic = {
 
             this.lastSaved = new Date();
             this.application.setNotModified();
-        }
+        };
+
+        this.captureKey = function(element, event) {
+            if (event.ctrlKey || event.metaKey) {
+                var key = String.fromCharCode(event.which).toLowerCase();
+                if (key !== "s") {
+                    return;
+                }
+                event.preventDefault();
+                if (this.active) {
+                    this.save();
+                }
+            }
+        };
     },
 
     newSaveButtonRend : function(params) {
