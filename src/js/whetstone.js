@@ -479,7 +479,8 @@ var whetstone = {
     // results in a call (only in the case that the event is a click), to
     // this.handler(element)
     //
-    eventClosure : function(obj, fn, conditional) {
+    eventClosure : function(obj, fn, conditional, prevent) {
+        prevent = whetstone.getParam(prevent, true);
         return function(event) {
             if (conditional) {
                 if (!conditional(event)) {
@@ -487,8 +488,12 @@ var whetstone = {
                 }
             }
 
-            event.preventDefault();
-            obj[fn](this);
+
+            if (prevent) {
+                event.preventDefault();
+            }
+
+            obj[fn](this, event);
         }
     },
 
@@ -526,7 +531,7 @@ var whetstone = {
     //////////////////////////////////////////////////////////////////
     // Event binding utilities
 
-    on : function(selector, event, caller, targetFunction, delay, conditional) {
+    on : function(selector, event, caller, targetFunction, delay, conditional, prevent) {
         // if the caller has an inner component (i.e. it is a Renderer), use the component's id
         // otherwise, if it has a namespace (which is true of Renderers or Templates) use that
         if (caller.component && caller.component.id) {
@@ -536,7 +541,7 @@ var whetstone = {
         }
 
         // create the closure to be called on the event
-        var clos = whetstone.eventClosure(caller, targetFunction, conditional);
+        var clos = whetstone.eventClosure(caller, targetFunction, conditional, prevent);
 
         // now bind the closure directly or with delay
         // if the caller has an inner component (i.e. it is a Renderer) use the components jQuery selector
