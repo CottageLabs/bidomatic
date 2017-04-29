@@ -488,12 +488,27 @@ var whetstone = {
                 }
             }
 
-
             if (prevent) {
                 event.preventDefault();
             }
 
             obj[fn](this, event);
+        }
+    },
+
+    functionEventClosure : function(fn, conditional, prevent) {
+        return function(event) {
+            if (conditional) {
+                if (!conditional(event)) {
+                    return;
+                }
+            }
+
+            if (prevent) {
+                event.preventDefault();
+            }
+
+            fn(this, event);
         }
     },
 
@@ -534,20 +549,31 @@ var whetstone = {
     on : function(selector, event, caller, targetFunction, delay, conditional, prevent) {
         // if the caller has an inner component (i.e. it is a Renderer), use the component's id
         // otherwise, if it has a namespace (which is true of Renderers or Templates) use that
-        if (caller.component && caller.component.id) {
-            event = event + "." + caller.component.id;
-        } else if (caller.namespace) {
-            event = event + "." + caller.namespace;
+        if (typeof(caller) === "string") {
+            event = event + "." + caller;
+        } else {
+            if (caller.component && caller.component.id) {
+                event = event + "." + caller.component.id;
+            } else if (caller.namespace) {
+                event = event + "." + caller.namespace;
+            }
         }
 
         // create the closure to be called on the event
-        var clos = whetstone.eventClosure(caller, targetFunction, conditional, prevent);
+        var clos;
+        if (typeof(targetFunction) === "string" && typeof(caller) !== "string") {
+            clos = whetstone.eventClosure(caller, targetFunction, conditional, prevent);
+        } else {
+            clos = whetstone.functionEventClosure(targetFunction, conditional, prevent);
+        }
 
         // now bind the closure directly or with delay
         // if the caller has an inner component (i.e. it is a Renderer) use the components jQuery selector
         // otherwise, if it has an inner, use the selector on that.
         if (delay) {
-            if (caller.component) {
+            if (typeof(caller) === "string") {
+                $(selector).unbind(event).bindWithDelay(event, clos, delay);
+            } else if (caller.component) {
                 caller.component.jq(selector).unbind(event).bindWithDelay(event, clos, delay);
             } else if (caller.application) {
                 caller.application.jq(selector).unbind(event).bindWithDelay(event, clos, delay);
@@ -555,7 +581,9 @@ var whetstone = {
                 console.log("attempt to bindWithDelay on caller which has neither inner component or application")
             }
         } else {
-            if (caller.component) {
+            if (typeof(caller) === "string") {
+                $(selector).unbind(event).on(event, clos);
+            } else if (caller.component) {
                 caller.component.jq(selector).unbind(event).on(event, clos);
             } else if (caller.application) {
                 caller.application.jq(selector).unbind(event).on(event, clos);
