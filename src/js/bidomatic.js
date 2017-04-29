@@ -967,6 +967,12 @@ var bidomatic = {
         this.scrollPointTag = "";
         this.lastActionOffset = 0;
 
+        this.titleElements = false;
+        this.titleIndex = false;
+        this.lastFirstPara = false;
+
+        this.currentTitleOriginalPosition = false;
+
         this.draw = function() {
             this.scrollPointTag = "";
 
@@ -982,6 +988,7 @@ var bidomatic = {
             var deleteClass = whetstone.css_classes(this.namespace, "delete", this);
             var genericControlClass = whetstone.css_classes(this.namespace, "controller", this);
             var scrollWindow = whetstone.css_classes(this.namespace, "scroll", this);
+            var fixableRow = whetstone.css_classes(this.namespace, "fixable", this);
 
             var currentTag = false;
             var currentSeq = 0;
@@ -994,7 +1001,7 @@ var bidomatic = {
                 var tag = entry.context_tag;
                 if (tag !== currentTag) {
                     currentTag = tag;
-                    frag += '<div class="row"><div class="col-md-12"><div class="' + tagClass + '">' + tag + '</div></div></div>';
+                    frag += '<div class="' + fixableRow + '"><div class="row"><div class="col-md-12"><div class="' + tagClass + '">' + tag + '</div></div></div></div>';
                 }
                 for (var j = 0; j < entry.tags.length; j++) {
                     var mytag = entry.tags[j];
@@ -1039,6 +1046,10 @@ var bidomatic = {
             whetstone.on(window, "resize", this, "resizeScrollArea");
             whetstone.on(this.component.jq(), "bidomatic:resizeContentViewerScroll", this, "resizeScrollArea");
 
+            this._indexTitles();
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            whetstone.on(scrollSelector, "scroll", this, "fixTitle");
+
             this.setScrollPoint();
 
             var showSelector = whetstone.css_class_selector(this.namespace, "showcontrols", this);
@@ -1065,6 +1076,8 @@ var bidomatic = {
             } else {
                 el.html("[hide controls]");
             }
+            this._indexTitles();
+            this.fixTitle();
         };
 
         this.editEntry = function(element) {
@@ -1078,6 +1091,9 @@ var bidomatic = {
                 el.html(that.restore);
                 that.restore = "";
                 that.enableEditButtons();
+
+                that._indexTitles();
+                that.fixTitle();
             };
 
             comp.beforeAdd = function() {
@@ -1092,6 +1108,9 @@ var bidomatic = {
             el.html('<div id="' + comp.id + '"></div>');
 
             comp.draw();
+
+            this._indexTitles();
+            this.fixTitle();
         };
 
         this.deleteEntry = function(element) {
@@ -1101,6 +1120,9 @@ var bidomatic = {
                 return;
             }
             this.component.delete({id: entry_id});
+
+            this._indexTitles();
+            this.fixTitle();
         };
 
         this.insertEntry = function(element) {
@@ -1123,6 +1145,9 @@ var bidomatic = {
 
                 var insertSelector = whetstone.css_class_selector(that.namespace, "insert", that);
                 whetstone.on(insertSelector, "click", that, "insertEntry");
+
+                that._indexTitles();
+                that.fixTitle();
             };
 
             comp.beforeAdd = function() {
@@ -1141,6 +1166,9 @@ var bidomatic = {
             el.html('<div id="' + comp.id + '"></div>');
 
             comp.draw();
+
+            this._indexTitles();
+            this.fixTitle();
         };
 
         this.disableEditButtons = function() {
@@ -1159,6 +1187,9 @@ var bidomatic = {
             var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
             var el = this.component.jq(scrollSelector);
             whetstone.sizeToVPBottom({jq: el, spacing: 10});
+
+            this._indexTitles();
+            this.fixTitle();
         };
 
         this.setScrollPoint = function() {
@@ -1172,11 +1203,11 @@ var bidomatic = {
             var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
             var scrollDiv = this.component.jq(scrollSelector);
 
-            var topOffset = 0;
+            var topOffset = 75;
             var duration = 0;
             if (action.type === "add") {
                 duration = 300;
-                topOffset = 30;
+                topOffset = 105;
             } else if (action.type === "insert") {
                 topOffset = this.lastActionOffset;
             } else if (action.type === "edit") {
@@ -1190,6 +1221,97 @@ var bidomatic = {
                 duration: duration,
                 topOffset: topOffset
             })
+        };
+
+        this._fixTitleElement = function(fixTitle, scrollDiv) {
+            var y = scrollDiv.offset().top;
+
+            fixTitle.addClass("fixed");
+            fixTitle.css("top", y + "px");
+            fixTitle.css("width", this.titleIndex.width + "px");
+            var para = fixTitle.next();
+            para.addClass("first_para");
+            this.lastFirstPara = para;
+        };
+
+        this._releaseTitles = function() {
+            if (this.titleElements && this.titleElements.hasClass("fixed")) {
+                this.titleElements.removeClass("fixed");
+                this.titleElements.removeAttr("style");
+            }
+
+            if (this.lastFirstPara) {
+                this.lastFirstPara.removeClass("first_para");
+            }
+
+            this.lastFirstPara = false;
+        };
+
+        this._indexTitles = function(params) {
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            var scrollDiv = this.component.jq(scrollSelector);
+            var y = scrollDiv.offset().top;
+            var st = scrollDiv.scrollTop();
+
+            var fixableRowSelector = whetstone.css_class_selector(this.namespace, "fixable", this);
+            this.titleElements = this.component.jq(fixableRowSelector);
+
+            this._releaseTitles();
+
+            var orderIndex = {};
+            this.titleElements.each(function(i) {
+                var el = $(this);
+                var ty = el.offset().top;
+                var pos = ty + st - y;
+                orderIndex[pos] = i;
+            });
+            var orderList = Object.keys(orderIndex);
+            for (var i = 0; i < orderList.length; i++) {
+                orderList[i] = parseInt(orderList[i]);
+            }
+            orderList.sort(function(a,b) { return a - b });
+
+            this.titleIndex = {
+                map: orderIndex,
+                sort: orderList,
+                width: $(this.titleElements[0]).outerWidth()
+            }
+        };
+
+        this.fixTitle = function() {
+            var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
+            var scrollDiv = this.component.jq(scrollSelector);
+            var st = scrollDiv.scrollTop();
+
+            var lowest = false;
+            for (var i = 0; i < this.titleIndex.sort.length; i++) {
+                var opos = this.titleIndex.sort[i];
+                var cpos = opos - st;
+                if (lowest === false && cpos < 0) {
+                    lowest = cpos;
+                } else {
+                    if (cpos < 0 && cpos > lowest) {
+                        lowest = cpos;
+                    }
+                }
+                if (cpos >= 0) {
+                    break;
+                }
+            }
+
+            if (lowest === false) {
+                this._releaseTitles();
+                return;
+            }
+            lowest = lowest + st;
+
+            var fixTitle = $(this.titleElements[this.titleIndex.map[lowest]]);
+            if (fixTitle.hasClass("fixed")) {
+                return;
+            }
+            
+            this._releaseTitles();
+            this._fixTitleElement(fixTitle, scrollDiv);
         };
     },
 

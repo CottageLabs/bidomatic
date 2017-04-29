@@ -1,7 +1,7 @@
 .bidomatic_contentviewer-tag {
     font-weight: bold;
     font-size: 120%;
-    padding: 5px 0px 0px 5px;
+    padding: 30px 0px 0px 5px;
 }
 
 .bidomatic_contentviewer-top {
@@ -50,6 +50,7 @@
     overflow-y: scroll;
     overflow-x: hidden;
     padding-bottom: 300px;
+    position: relative;
 }
 
 .bidomatic_tagsbrowser-scroll {
@@ -58,6 +59,23 @@
     padding-bottom: 300px;
 }
 
-.bidomatic_contentviewer-tag {
-    margin-top: 30px;
+.bidomatic_contentviewer-fixable {
+    background: #ffffff;
+    /* padding: 10px 20px; */
+    padding-bottom: 10px;
+    position: relative;
+    z-index: 1;
+    height: 70px;
+}
+
+.bidomatic_contentviewer-fixable.fixed {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    box-shadow: 0px 3px 0px 0px rgba(0, 0, 0, .2);
+    /* box-sizing: border-box; */
+}
+
+.first_para {
+    margin-top: 70px;
 }
