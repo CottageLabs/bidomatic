@@ -403,6 +403,48 @@ var bidomatic = {
             this.tagSortOrder.sort();
         };
 
+        this.substituteTagPrefix = function(params) {
+            var path = params.path;
+            var subOut = params.oldName;
+            var subIn = params.newName;
+
+            if (path) {
+                subOut = path + "/" + subOut;
+                subIn = path + "/" + subIn;
+            }
+
+            var reindex = false;
+
+            var iter = this.iterEntries();
+            while (iter.hasNext()) {
+                var entry = iter.next();
+                var changed = false;
+                for (var i = 0; i < entry.tags.length; i++) {
+                    var tag = entry.tags[i];
+                    if (tag.path === subOut) {
+                        tag.path = subIn;
+                        changed = true;
+                    } else if (whetstone.startswith(tag.path, subOut + "/")) {
+                        tag.path = tag.path.replace(subOut, subIn);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    this._normaliseTag({tag: tag, fromPathSeq: true});
+                    entry.tagstring = this._serialiseTags({tags: entry.tags});
+                    reindex = true;
+                }
+            }
+
+            if (reindex) {
+                this.recordAction({entry_id: false, action: "substitute-tag", type: false, context_tag: subIn});
+                this.currentModified = true;
+
+                this.index();
+                this.cycle();
+            }
+        };
+
         this._parseTags = function(params) {
             var source = params.source;
             var parsed = [];
@@ -796,6 +838,10 @@ var bidomatic = {
 
         this.clearPathFilter = function() {
             this.application.clearFilters({filters: ["tag"]});
+        };
+
+        this.renameTag = function(params) {
+            this.application.substituteTagPrefix(params);
         }
     },
 
@@ -810,6 +856,9 @@ var bidomatic = {
             var linkClass = whetstone.css_classes(this.namespace, "link", this);
             var selectedClass = whetstone.css_classes(this.namespace, "selected", this);
             var scrollClass = whetstone.css_classes(this.namespace, "scroll", this);
+            var editClass = whetstone.css_classes(this.namespace, "edit", this);
+            var listClass = whetstone.css_classes(this.namespace, "list", this);
+            var renameLinkClass = whetstone.css_classes(this.namespace, "rename", this);
 
             var allSelected = "";
             if (this.component.tagFilter === false) {
@@ -817,7 +866,7 @@ var bidomatic = {
             }
             var frag = '<a href="#" class="' + allClass + ' ' + allSelected + '">[show all]</a><br>';
             frag += '<div class="' + scrollClass + '">';
-            frag += this._drawLevel({context: this.component.tags, linkClass: linkClass, path: ""});
+            frag += this._drawLevel({context: this.component.tags, linkClass: linkClass, path: "", editClass: editClass, listClass: listClass, renameLinkClass: renameLinkClass});
             frag += '</div>';
             this.component.context.html(frag);
 
@@ -827,8 +876,15 @@ var bidomatic = {
             var linkSelector = whetstone.css_class_selector(this.namespace, "link", this);
             whetstone.on(linkSelector, "click", this, "tagSelected");
 
+            var listItemSelector = whetstone.css_class_selector(this.namespace, "list", this);
+            whetstone.on(listItemSelector, "mouseover", this, "showEdit");
+            whetstone.on(listItemSelector, "mouseout", this, "hideEdit");
+
             var allSelector = whetstone.css_class_selector(this.namespace, "all", this);
             whetstone.on(allSelector, "click", this, "clearTags");
+
+            var renameSelector = whetstone.css_class_selector(this.namespace, "rename", this);
+            whetstone.on(renameSelector, "click", this, "renameTag");
         };
 
         this.tagSelected = function(element) {
@@ -846,8 +902,38 @@ var bidomatic = {
             whetstone.sizeToVPBottom({jq: el, spacing: 10});
         };
 
+        this.showEdit = function(element) {
+            var editSelector = whetstone.css_class_selector(this.namespace, "edit", this);
+            $(element).find(editSelector).show();
+        };
+
+        this.hideEdit = function(element) {
+            var editSelector = whetstone.css_class_selector(this.namespace, "edit", this);
+            $(element).find(editSelector).hide();
+        };
+
+        this.renameTag = function(element) {
+            var el = $(element);
+            var name = el.attr("data-name");
+            var newName = prompt("Choose a new name for the tag '" + name + "'", name);
+
+            if (newName === null || newName === "") {
+                return;
+            }
+
+            var path = el.attr("data-path");
+            path = path.substring(0, path.length - name.length);
+            if (path.length >= 1) {
+                path = path.substring(0, path.length - 1);
+            }
+            this.component.renameTag({path: path, oldName: name, newName: newName});
+        };
+
         this._drawLevel = function(params) {
             var linkClass = params.linkClass;
+            var editClass = params.editClass;
+            var listClass = params.listClass;
+            var renameLinkClass = params.renameLinkClass;
             var path = params.path;
 
             var frag = "<ul>";
@@ -864,11 +950,12 @@ var bidomatic = {
                 if (this.component.tagFilter && this.component.tagFilter === subPath) {
                     selectedClass = whetstone.css_classes(this.namespace, "selected", this);
                 }
-                frag += "<li><a href='#' class='" + linkClass + " " + selectedClass + "' data-path='" + subPath + "'>" + whetstone.escapeHtml(key) + "</a>";
+                frag += "<li class='" + listClass + "'><a href='#' class='" + linkClass + " " + selectedClass + "' data-path='" + subPath + "'>" + whetstone.escapeHtml(key) + "</a>";
+                frag += '<span class="' + editClass + '" style="display:none">(<a href="#" class="' + renameLinkClass + '" data-name="' + whetstone.escapeHtml(key) + '" data-path="' + subPath + '">rename</a>)</span>';
                 var children = context[key];
                 var ckeys = Object.keys(children);
                 if (ckeys.length > 0) {
-                    frag += this._drawLevel({context: children, linkClass: linkClass, path: subPath});
+                    frag += this._drawLevel({context: children, linkClass: linkClass, path: subPath, editClass: editClass, listClass: listClass, renameLinkClass: renameLinkClass});
                 }
                 frag += "</li>";
             }
@@ -1195,6 +1282,9 @@ var bidomatic = {
         this.setScrollPoint = function() {
             var action = this.component.lastAction;
             if (!action) {
+                return;
+            }
+            if (!action.entry_id) {
                 return;
             }
             var rowIdSelector = whetstone.css_id_selector(this.namespace, "row_" + action.entry_id + "_" + whetstone.safeId(this.scrollPointTag), this);

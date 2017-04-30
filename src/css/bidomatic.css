@@ -79,3 +79,15 @@
 .first_para {
     margin-top: 70px;
 }
+
+.bidomatic_tagsbrowser-list {
+    list-style-type: none;
+}
+
+.bidomatic_tagsbrowser-list:hover {
+    background: #eeeeee;
+}
+
+.bidomatic_tagsbrowser-edit {
+    margin-left: 10px;
+}
