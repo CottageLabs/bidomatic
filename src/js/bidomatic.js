@@ -1679,7 +1679,7 @@ var bidomatic = {
             whetstone.on(cancelSelector, "click", this, "cancelClicked");
 
             var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
-            whetstone.on(contentSelector, "keyup", this, "preview");
+            whetstone.on(contentSelector, "input", this, "preview");
         };
 
         this.saveClicked = function(element) {
