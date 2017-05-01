@@ -1307,7 +1307,7 @@ var bidomatic = {
             whetstone.scrollIntoView({
                 scrollParent: scrollDiv,
                 scrollElement: row,
-                ifNeeded: true,
+                ifNeeded: false,
                 duration: duration,
                 topOffset: topOffset
             })
