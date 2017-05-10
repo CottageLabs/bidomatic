@@ -24,7 +24,7 @@ var bidomatic = {
                 bidomatic.newAddButton({
                     category: "dm.control",
                     controls: "addform",
-                    firesOnToggle: "bidomatic:resizeContentViewerScroll"
+                    firesOnToggle: "bidomatic:verticalSizeChange"
                 }),
                 bidomatic.newSaveButton({
                     category: "dm.control"
@@ -1131,11 +1131,12 @@ var bidomatic = {
 
             this.resizeScrollArea();
             whetstone.on(window, "resize", this, "resizeScrollArea");
-            whetstone.on(this.component.jq(), "bidomatic:resizeContentViewerScroll", this, "resizeScrollArea");
+            whetstone.on(this.component.jq(), "bidomatic:verticalSizeChange", this, "resizeScrollArea");
 
             this._indexTitles();
             var scrollSelector = whetstone.css_class_selector(this.namespace, "scroll", this);
             whetstone.on(scrollSelector, "scroll", this, "fixTitle");
+            whetstone.on(window, "scroll", this, "indexAndFixTitle");
 
             this.setScrollPoint();
 
@@ -1403,6 +1404,11 @@ var bidomatic = {
             this._releaseTitles();
             this._fixTitleElement(fixTitle, scrollDiv);
         };
+
+        this.indexAndFixTitle = function() {
+            this._indexTitles();
+            this.fixTitle();
+        }
     },
 
     newAddButton : function(params) {
@@ -1476,6 +1482,8 @@ var bidomatic = {
     },
     SaveButton : function(params) {
 
+        // this.firesOnSave = whetstone.getParam(params.firesOnSave, false);
+
         this.active = false;
         this.lastSaved = false;
 
@@ -1509,6 +1517,10 @@ var bidomatic = {
 
             this.lastSaved = new Date();
             this.application.setNotModified();
+
+            //if (this.firesOnSave) {
+            //    this.application.jq().trigger(this.firesOnSave);
+            //}
         };
 
         this.captureKey = function(element, event) {
@@ -1613,7 +1625,11 @@ var bidomatic = {
             if (this.oncancel) {
                 this.oncancel();
             }
-        }
+        };
+
+        this.fireSizeChange = function() {
+            this.application.jq().trigger("bidomatic:verticalSizeChange");
+        };
     },
 
     newAddEditFormRend : function(params) {
@@ -1706,10 +1722,18 @@ var bidomatic = {
             var contentSelector = whetstone.css_id_selector(this.namespace, "content", this);
             var previewSelector = whetstone.css_id_selector(this.namespace, "preview_" + this.component.entry.id, this);
 
+            var el = this.component.jq(previewSelector);
+            var height = el.height();
+
             var content = this.component.jq(contentSelector).val();
             var html = this.markdown.makeHtml(content);
 
-            this.component.jq(previewSelector).html(html);
+            el.html(html);
+            var newHeight = el.height();
+
+            if (newHeight !== height) {
+                this.component.fireSizeChange();
+            }
         }
     },
 
